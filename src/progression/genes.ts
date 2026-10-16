@@ -2,6 +2,7 @@
 
 import { ACTIVE_ORGANS } from '../config/organs';
 import { PASSIVE_GENES } from '../config/passives';
+import { BALANCE } from '../config/balance';
 import type { GeneId } from '../config/types';
 import type { PlayerState, World } from '../game/types';
 
@@ -29,6 +30,8 @@ export function recalculateStatsAndGenes(world: World): void {
     const def = PASSIVE_GENES.find((g) => g.id === p.id);
     if (def) def.tags.forEach((t) => { counts[t] += p.level * 2; });
   });
+  // 血脉祝福（局外解锁）：开局给对应基因亲和加成，引导进化走向
+  if (world.bloodline) counts[world.bloodline] += BALANCE.bloodlineBonus;
   player.geneCounts = counts;
 
   const base = player.form.stats;
@@ -37,15 +40,16 @@ export function recalculateStatsAndGenes(world: World): void {
   const fangLv = getPassiveLevel(player, 'fang');
   const featherLv = getPassiveLevel(player, 'feather');
   const muscleLv = getPassiveLevel(player, 'muscle');
+  const meta = player.meta;
 
-  const hpMult = 1 + carapaceLv * 0.15 + heartLv * 0.2 + player.taotieStacks * 0.005;
+  const hpMult = (1 + carapaceLv * 0.15 + heartLv * 0.2 + player.taotieStacks * 0.005) * (1 + meta.hpPct);
   const oldMax = player.maxHp;
   player.maxHp = Math.round(base.hp * hpMult);
   if (player.maxHp > oldMax) player.hp += player.maxHp - oldMax;
 
-  player.speed = base.speed * (1 + featherLv * 0.1);
-  player.dmgMult = base.dmgMult * (1 + fangLv * 0.15 + player.taotieStacks * 0.004);
-  player.armor = base.armor + carapaceLv * 5;
+  player.speed = base.speed * (1 + featherLv * 0.1) * (1 + meta.speedPct);
+  player.dmgMult = base.dmgMult * (1 + fangLv * 0.15 + player.taotieStacks * 0.004) * (1 + meta.dmgPct);
+  player.armor = base.armor + carapaceLv * 5 + meta.armorAdd;
   player.radius = (22 + player.stage * 4) * (1 + muscleLv * 0.06);
 
   world.events.onStatsChanged?.();

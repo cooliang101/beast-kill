@@ -4,8 +4,9 @@ import { ALL_FORMS } from '../config/forms';
 import { BALANCE } from '../config/balance';
 import { Pool } from '../core/pool';
 import { SpatialGrid } from '../core/spatial';
+import { createDirector } from './spawn';
 import type { BeastForm } from '../config/types';
-import type { Enemy, PlayerState, Pools, World } from './types';
+import type { Enemy, EnemyShot, PlayerState, Pools, World } from './types';
 
 /** 地图装饰要素（80 个辉光圆环），与原 demo 一致 */
 export interface MapFeature {
@@ -32,7 +33,7 @@ function emptyGeneCounts(): PlayerState['geneCounts'] {
   return { wind: 0, fire: 0, thunder: 0, poison: 0, blood: 0, ice: 0, rock: 0, dark: 0, phantom: 0 };
 }
 
-export function createPlayer(form: BeastForm): PlayerState {
+export function createPlayer(form: BeastForm, startOrganId = 'claw'): PlayerState {
   return {
     x: 0,
     y: 0,
@@ -52,9 +53,10 @@ export function createPlayer(form: BeastForm): PlayerState {
     hurtTimer: 0,
     formSkillTimer: 0,
     taotieStacks: 0,
-    organs: [{ id: 'claw', level: 1, evolved: false, timer: 0.1 }],
+    organs: [{ id: startOrganId, level: 1, evolved: false, timer: 0.1 }],
     passives: [],
     geneCounts: emptyGeneCounts(),
+    meta: { hpPct: 0, speedPct: 0, dmgPct: 0, critAdd: 0, armorAdd: 0 },
   };
 }
 
@@ -64,6 +66,11 @@ function createPools(): Pools {
       x: 0, y: 0, angle: 0, walkPhase: 0, hurtTimer: 0,
       primary: '#fff', secondary: '#fff', accent: '#fff',
       maxHp: 1, hp: 1, speed: 1, radius: 10, isBoss: false, name: '', typeIndex: 0,
+      behavior: 'chaser', actionTimer: 0, actionState: 0, dashVx: 0, dashVy: 0,
+      elite: false, affix: 'none', contactMult: 1, kbImmune: false, regen: 0,
+    })),
+    enemyShot: new Pool<EnemyShot>(() => ({
+      x: 0, y: 0, vx: 0, vy: 0, r: 9, color: '#f87171', dmg: 0, life: 0,
     })),
     projectile: new Pool(() => ({
       x: 0, y: 0, vx: 0, vy: 0, r: 8, color: '#fff', dmg: 0, pierce: 1,
@@ -113,6 +120,7 @@ export function createWorld(): World {
     view: { w: 1280, h: 720 },
     player: createPlayer(ALL_FORMS.stage1[0]),
     enemies: [],
+    enemyShots: [],
     projectiles: [],
     meteors: [],
     slashes: [],
@@ -127,16 +135,27 @@ export function createWorld(): World {
     gems: [],
     spawnTimer: 0,
     nextBossTime: BALANCE.bossFirstTime,
+    bossesKilled: 0,
+    victory: false,
+    endless: false,
+    difficulty: 1,
+    enemySpeedMult: 1,
+    enemyExpMult: 1,
+    startOrganId: 'claw',
+    bloodline: null,
+    director: createDirector(),
     pools: createPools(),
     grid: new SpatialGrid<Enemy>(BALANCE.hashCellSize),
     events: {},
   };
 }
 
-/** 重开一局：清空全部实体并回收到池，保留池与网格实例 */
+/** 重开一局：清空全部实体并回收到池，保留池与网格实例。
+ *  注意：difficulty / startOrganId / bloodline 属于"本局配置"，由 Game 在调用前设置，此处保留。 */
 export function resetWorld(world: World): void {
   const { pools } = world;
   for (const e of world.enemies) pools.enemy.release(e);
+  for (const s of world.enemyShots) pools.enemyShot.release(s);
   for (const p of world.projectiles) pools.projectile.release(p);
   for (const s of world.slashes) pools.slash.release(s);
   for (const b of world.bolts) pools.bolt.release(b);
@@ -151,6 +170,7 @@ export function resetWorld(world: World): void {
   for (const g of world.gems) pools.gem.release(g);
 
   world.enemies.length = 0;
+  world.enemyShots.length = 0;
   world.projectiles.length = 0;
   world.slashes.length = 0;
   world.bolts.length = 0;
@@ -169,6 +189,12 @@ export function resetWorld(world: World): void {
   world.shake = 0;
   world.spawnTimer = 0;
   world.nextBossTime = BALANCE.bossFirstTime;
-  world.player = createPlayer(ALL_FORMS.stage1[0]);
+  world.bossesKilled = 0;
+  world.victory = false;
+  world.endless = false;
+  world.enemySpeedMult = 1;
+  world.enemyExpMult = 1;
+  world.director = createDirector();
+  world.player = createPlayer(ALL_FORMS.stage1[0], world.startOrganId);
   world.grid.build(world.enemies);
 }

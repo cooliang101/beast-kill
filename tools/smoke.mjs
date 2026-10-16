@@ -117,8 +117,13 @@ try {
   check('无外部字体 CDN 请求', externalFontRequests.length === 0, externalFontRequests.slice(0, 2).join(' '));
   await page.screenshot({ path: `${SHOT_DIR}/01-start.png` });
 
-  // ---- 开始游戏 ----
+  // ---- 开局准备 → 开始游戏 ----
   await page.click('#btnStartGame');
+  await page.waitForTimeout(500);
+  check('封面开始 → 开局准备弹窗（择器降世）', await visible('#runPrepModal'));
+  check('准备弹窗含起始器官与破壳按钮', (await page.locator('#prepOrgans button').count()) >= 1 && (await visible('#btnPrepStart')));
+  await page.screenshot({ path: `${SHOT_DIR}/00-runprep.png` });
+  await page.click('#btnPrepStart');
   await page.waitForTimeout(800);
   check('点击开始 → 状态 PLAYING', (await getState()) === 'PLAYING', `实际: ${await getState()}`);
   check('HUD 已显示', await visible('#hud'));
@@ -201,10 +206,51 @@ try {
   await page.waitForTimeout(400);
   check('返回封面 → 主菜单可见且状态 START', (await visible('#startModal')) && (await getState()) === 'START');
 
-  // ---- 压测帧率（放最后，避免玩家阵亡/升级干扰后续断言） ----
+  // ---- 吞噬祭坛（局外成长） ----
+  await page.click('#btnOpenMeta');
+  await page.waitForTimeout(500);
+  check('封面 → 吞噬祭坛打开', await visible('#metaModal'));
+  const buyNodes = await page.locator('#metaContent [data-buy-node]').count();
+  const diffCards = await page.locator('#metaContent .grid-cols-2.md\\:grid-cols-4 > div').count();
+  check('祭坛渲染解锁树（难度/血脉/器官/节点）', buyNodes >= 5 && diffCards >= 4, `节点按钮=${buyNodes} 难度卡=${diffCards}`);
+  await page.screenshot({ path: `${SHOT_DIR}/08-meta.png` });
+  await page.click('#btnCloseMeta');
+  await page.waitForTimeout(300);
+  check('关闭祭坛 → 回到封面', !(await visible('#metaModal')) && (await visible('#startModal')));
+
+  // ---- 新局（准备工作流）+ 精英 / 随机事件 / 通关结算 / 无尽 ----
   await page.click('#btnStartGame');
-  await page.waitForTimeout(600);
+  await page.waitForTimeout(400);
+  await page.click('#btnPrepStart');
+  await page.waitForTimeout(700);
   check('新局开始：提示浮层未残留', !(await visible('#hintToast')));
+  await ensureSandboxOpen();
+
+  await page.click('#btnCheatElite');
+  await page.waitForTimeout(700);
+  const eliteCount = await page.evaluate(() => window.__game?.world.enemies.filter((e) => e.elite).length ?? -1);
+  check('试炼台引精英 → 精英带词缀出现', eliteCount >= 5, `精英数=${eliteCount}`);
+
+  // 通过调试句柄把事件计时拨到临界，确定性触发一次随机事件
+  await page.evaluate(() => { if (window.__game) window.__game.world.director.eventTimer = 0.01; });
+  await page.waitForTimeout(800);
+  check('随机事件触发 → 事件横幅出现', await visible('#eventBanner'), `横幅: ${((await page.locator('#eventBanner').textContent()) ?? '').slice(0, 24)}`);
+  await page.screenshot({ path: `${SHOT_DIR}/09-elite-event.png` });
+
+  await page.click('#btnCheatWin');
+  await page.waitForTimeout(900);
+  const endTitle = (await page.locator('#endTitle').textContent()) ?? '';
+  check('立即通关 → 胜利结算弹窗', (await visible('#gameOverModal')) && endTitle.includes('通关'), `标题: ${endTitle}`);
+  const essenceText = ((await page.locator('#endEssence').textContent()) ?? '').replace(/\s+/g, ' ').trim();
+  check('结算显示精华入账与累计', /💠\s*\d/.test(essenceText), essenceText.slice(0, 70));
+  check('胜利结算提供「继续征程（无尽）」', await visible('#btnEndless'));
+  await page.screenshot({ path: `${SHOT_DIR}/10-victory.png` });
+
+  await page.click('#btnEndless');
+  await page.waitForTimeout(500);
+  check('继续征程 → 恢复游戏（无尽模式）', (await getState()) === 'PLAYING');
+
+  // ---- 压测帧率（放最后，避免阵亡/升级干扰后续断言） ----
   await ensureSandboxOpen();
   await page.click('#btnCheatStress');
   await page.waitForTimeout(1200);
@@ -235,6 +281,8 @@ try {
   await narrow.goto(DEBUG_URL, { waitUntil: 'domcontentloaded' });
   await narrow.waitForSelector('#game-root canvas');
   await narrow.click('#btnStartGame');
+  await narrow.waitForTimeout(400);
+  await narrow.click('#btnPrepStart'); // 新开局流程：先过"择器降世"
   await narrow.waitForTimeout(800);
   const box = await narrow.locator('#btnPause').boundingBox();
   const inViewport = !!box && box.x >= 0 && box.x + box.width <= 900 && box.y >= 0;

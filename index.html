@@ -74,6 +74,8 @@
       <button id="btnCheatUnlockSynergy" class="badge-nowrap px-2.5 py-1 rounded-none bg-rose-600/30 hover:bg-rose-500/50 border border-rose-400/50 text-rose-200 text-xs font-bold cursor-pointer">🔥 一键觉醒当前超武</button>
       <button id="btnCheatAllSynergy" class="badge-nowrap px-2.5 py-1 rounded-none bg-yellow-500/30 hover:bg-yellow-400/50 border border-yellow-300/60 text-yellow-200 text-xs font-bold cursor-pointer">🌟 满配6大超武神装</button>
       <button id="btnCheatStress" class="badge-nowrap px-2.5 py-1 rounded-none bg-cyan-600/30 hover:bg-cyan-500/50 border border-cyan-400/50 text-cyan-200 text-xs font-bold cursor-pointer">🐜 压测：生成1500只怪</button>
+      <button id="btnCheatWin" class="badge-nowrap px-2.5 py-1 rounded-none bg-amber-500/30 hover:bg-amber-400/50 border border-amber-300/60 text-amber-100 text-xs font-bold cursor-pointer">👑 立即通关结算</button>
+      <button id="btnCheatElite" class="badge-nowrap px-2.5 py-1 rounded-none bg-rose-500/30 hover:bg-rose-400/50 border border-rose-300/60 text-rose-100 text-xs font-bold cursor-pointer">🎲 引 5 只精英</button>
     </div>
     <span class="text-[11px] text-slate-400 badge-nowrap">提示：渲染管线已 GPU 化，满屏超武与海量单位依然丝滑！</span>
   </div>
@@ -93,6 +95,9 @@
 
 <!-- 操作提示浮层 -->
 <div id="hintToast" class="fixed top-28 left-1/2 -translate-x-1/2 z-50 pointer-events-none hidden myth-panel px-4 py-2 rounded-none border border-amber-400/60 text-amber-100 text-sm font-bold badge-nowrap"></div>
+
+<!-- 随机事件横幅 -->
+<div id="eventBanner" class="fixed top-16 left-1/2 -translate-x-1/2 z-30 pointer-events-none hidden myth-panel px-6 py-2 rounded-none border-2 text-base font-bold badge-nowrap"></div>
 
 <!-- Boss 警告横幅 --><div id="bossWarning" class="fixed top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none hidden">
   <div class="myth-panel px-8 py-3 rounded-none border-2 border-red-500 bg-red-950/90 flex items-center gap-4 animate-bounce">
@@ -127,6 +132,9 @@
       </button>
       <button id="btnOpenCodexStart" class="px-6 py-3.5 rounded-none bg-slate-800/90 hover:bg-slate-700 border border-amber-400/50 text-amber-200 font-bold text-base transition cursor-pointer">
         📜 万兽进化图鉴 & 联动配方
+      </button>
+      <button id="btnOpenMeta" class="px-6 py-3.5 rounded-none bg-purple-900/60 hover:bg-purple-800 border border-purple-400/50 text-purple-100 font-bold text-base transition cursor-pointer">
+        🕯 吞噬祭坛 · 局外成长
       </button>
     </div>
   </div>
@@ -217,10 +225,64 @@
     <h2 id="endTitle" class="text-4xl font-calligraphy text-amber-300 mb-2">洪荒陨落 · 身死道消</h2>
     <p id="endSubtitle" class="text-sm text-slate-300 mb-5">你的血肉重归山海大地，等待下一次轮回破壳</p>
     <canvas id="endFormPreview" style="width:160px;height:160px" class="mb-4 rounded-none bg-slate-950/90 border border-amber-500/40"></canvas>
-    <div id="endStats" class="w-full bg-slate-900/80 rounded-none p-4 border border-amber-500/20 text-sm space-y-2 mb-6"></div>
-    <button id="btnRestart" class="px-8 py-3 rounded-none btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg hover:scale-105 transition cursor-pointer">
-      🔄 重入轮回 · 再次吞噬
-    </button>
+    <div id="endStats" class="w-full bg-slate-900/80 rounded-none p-4 border border-amber-500/20 text-sm space-y-2 mb-3"></div>
+    <div id="endEssence" class="w-full bg-purple-950/60 rounded-none p-3 border border-purple-400/40 text-sm space-y-1.5 mb-5"></div>
+    <div class="w-full flex flex-col gap-2.5">
+      <button id="btnEndless" class="hidden w-full py-2.5 rounded-none bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-400/50 text-emerald-100 font-bold text-sm transition cursor-pointer">
+        ⚔️ 繼續征程 · 无尽模式（敌人持续增强，不再结算）
+      </button>
+      <button id="btnRestart" class="w-full py-3 rounded-none btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg hover:scale-[1.02] transition cursor-pointer">
+        🔄 重入轮回 · 再次吞噬
+      </button>
+      <div class="flex gap-2.5">
+        <button id="btnSettleMeta" class="flex-1 py-2.5 rounded-none bg-purple-900/60 hover:bg-purple-800 border border-purple-400/50 text-purple-100 font-bold text-sm transition cursor-pointer">
+          🕯 吞噬祭坛
+        </button>
+        <button id="btnSettleTitle" class="flex-1 py-2.5 rounded-none bg-slate-800/90 hover:bg-slate-700 border border-amber-400/40 text-amber-200 font-bold text-sm transition cursor-pointer">
+          🏠 返回封面
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 开局准备：择器官降世 + 血脉祝福 -->
+<div id="runPrepModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-3xl w-full rounded-none p-6 md:p-8 border-2 border-amber-500/50 flex flex-col items-center">
+    <div class="text-xs tracking-[0.3em] text-amber-400 font-bold mb-1">BIRTH PREPARATION · 降世准备</div>
+    <h2 class="text-3xl md:text-4xl font-calligraphy text-amber-200 mb-4">择器降世 · 血脉祝福</h2>
+    <div id="prepSummary" class="text-xs text-slate-300 mb-5 text-center"></div>
+    <div class="w-full">
+      <div class="text-xs font-bold text-amber-300 mb-2">⚔️ 起始器官（开局即拥有的主动器官）</div>
+      <div id="prepOrgans" class="grid grid-cols-2 md:grid-cols-3 gap-2.5 mb-5"></div>
+      <div class="text-xs font-bold text-cyan-300 mb-2">🩸 血脉祝福（可选：对应基因亲和 +6，引导进化方向）</div>
+      <div id="prepBloodlines" class="flex flex-wrap gap-2 mb-6"></div>
+    </div>
+    <div class="flex gap-3 w-full">
+      <button id="btnPrepStart" class="flex-1 py-3 rounded-none btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg transition cursor-pointer">
+        🔥 破壳降世
+      </button>
+      <button id="btnPrepCancel" class="px-6 py-3 rounded-none bg-slate-800/90 hover:bg-slate-700 border border-amber-400/40 text-amber-200 font-bold text-sm transition cursor-pointer">
+        取消
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 吞噬祭坛：局外成长 -->
+<div id="metaModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-5xl w-full h-[88vh] rounded-none p-5 md:p-7 border-2 border-purple-400/50 flex flex-col">
+    <div class="flex flex-wrap items-center justify-between border-b border-purple-400/30 pb-3 mb-4 gap-2">
+      <div>
+        <h2 class="text-2xl md:text-3xl font-calligraphy text-purple-200">🕯 吞噬祭坛 · 局外成长</h2>
+        <p id="metaSummary" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="metaEssence" class="badge-nowrap text-lg font-bold text-purple-200">💠 0</span>
+        <button id="btnCloseMeta" class="badge-nowrap px-3 py-1.5 rounded-none bg-rose-900/60 hover:bg-rose-700 text-rose-200 border border-rose-500/40 text-xs md:text-sm font-bold cursor-pointer">✕ 关闭</button>
+      </div>
+    </div>
+    <div id="metaContent" class="flex-1 overflow-y-auto pr-2 space-y-5"></div>
   </div>
 </div>
 

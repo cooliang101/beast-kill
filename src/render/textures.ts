@@ -25,6 +25,8 @@ export interface WildTextures {
 export interface BakedTextures {
   wild: WildTextures[];
   bossRing: Texture;
+  eliteRing: Texture;
+  enemyOrb: Texture;
   particle: Texture;
   gem: Texture;
   gridCell: Texture;
@@ -90,6 +92,29 @@ export function bakeTextures(): BakedTextures {
         '#ef4444', 1,
       );
     }
+  });
+
+  // ---- 精英词缀环（白底 tint，艺术半径 18） ----
+  const ELITE_RING_TEXEL_R = 18;
+  const eliteRingSize = ELITE_RING_TEXEL_R * 2 + PAD * 2;
+  const erc = eliteRingSize / 2;
+  const eliteRing = bake(eliteRingSize, eliteRingSize, (ctx) => {
+    for (let a = 0; a < Math.PI * 2; a += 0.34) {
+      pxLine(
+        ctx,
+        erc + Math.cos(a) * ELITE_RING_TEXEL_R, erc + Math.sin(a) * ELITE_RING_TEXEL_R,
+        erc + Math.cos(a + 0.2) * ELITE_RING_TEXEL_R, erc + Math.sin(a + 0.2) * ELITE_RING_TEXEL_R,
+        '#ffffff', 1,
+      );
+    }
+  });
+
+  // ---- 敌方弹幕法球（白底 tint，艺术半径 4） ----
+  const orbSize = 10;
+  const oc = orbSize / 2;
+  const enemyOrb = bake(orbSize, orbSize, (ctx) => {
+    pxDitherEllipse(ctx, oc, oc, 4, 4, '#ffffff', 0.45);
+    pxEllipse(ctx, oc, oc, 2, 2, '#ffffff');
   });
 
   // ---- 粒子火花（艺术半径 2，运行时恒定缩放） ----
@@ -198,6 +223,8 @@ export function bakeTextures(): BakedTextures {
   return {
     wild,
     bossRing,
+    eliteRing,
+    enemyOrb,
     particle,
     gem,
     gridCell,
@@ -219,6 +246,10 @@ export function bakeTextures(): BakedTextures {
 /** Boss 警示环：艺术半径 18 ↔ 世界半径 55（44 × 1.25） */
 export const BOSS_RING_TEXEL_R = 18;
 export const BOSS_RING_WORLD_R = 55;
+/** 精英词缀环：艺术半径 18（运行时 scale = 精英世界半径×1.15 / 该值） */
+export const ELITE_RING_TEXEL_R = 18;
+/** 敌方弹幕法球：艺术半径 4 */
+export const ENEMY_ORB_TEXEL_R = 4;
 /** 月牙：艺术半径 40 */
 export const SLASH_ARC_TEXEL_R = 40;
 /** 冰剑 / 风刃：贴图外延 6 艺术像素；原始比例分别为 1.9×p.r 与 1.6×p.r */

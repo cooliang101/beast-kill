@@ -1,10 +1,13 @@
-// 游戏编排：持有世界、渲染场景、HUD、输入与主循环，并完成事件与按钮接线。
+// 游戏编排：持有世界、渲染场景、HUD、输入、主循环、局外存档，并完成事件与按钮接线。
 
+import { BALANCE } from '../config/balance';
 import { FixedLoop } from '../core/loop';
 import { Input } from '../core/input';
 import { createWorld, resetWorld } from './world';
 import { updateWorld } from './update';
 import { recalculateStatsAndGenes } from '../progression/genes';
+import { loadMeta, metaBonuses, settleRun } from '../meta/save';
+import type { MetaSave, RunStats } from '../meta/save';
 import { GameScene } from '../render/scene';
 import { Hud } from '../ui/hud';
 import { startPreviewLoop } from '../ui/previews';
@@ -14,7 +17,6 @@ import {
   isPauseMenuOpen,
   openCodex,
   openEvolutionModal,
-  openGameOverModal,
   openPauseMenu,
   openUpgradeModal,
   resumeFromPause,
@@ -23,7 +25,9 @@ import {
   wirePauseMenu,
   wireSandbox,
 } from '../ui/modals';
+import { closeMetaModal, openMetaModal, openRunPrep, openSettlement, showEventBanner } from '../ui/meta';
 import { sfx } from '../audio/sfx';
+import type { GeneId } from '../config/types';
 import type { GameState, World } from './types';
 
 function byId(id: string): HTMLElement {
@@ -34,11 +38,16 @@ function byId(id: string): HTMLElement {
 
 export class Game {
   readonly world: World = createWorld();
+  /** 局外存档（精华/解锁/图鉴点亮），由 UI 层直接读写并持久化 */
+  readonly meta: MetaSave = loadMeta();
   private readonly scene = new GameScene();
   private input!: Input;
   private hud!: Hud;
   private loop!: FixedLoop;
   private state: GameState = 'START';
+  /** 每局只结算一次（胜利后继续无尽不再重复入账） */
+  private runSettled = false;
+  private lastSettlement: { victory: boolean; gained: number; unlockedTier: number | null } | null = null;
 
   async init(host: HTMLElement): Promise<void> {
     // 字体最多等 3 秒：字体服务异常时不应阻塞整局启动（退化用兜底字形烘焙）
@@ -113,11 +122,20 @@ export class Game {
     showHint('需先完成本次选择');
   }
 
-  startNewGame(): void {
+  /** 开局。opts 省略时沿用上一局的起始器官/血脉（重开本局/再来一局） */
+  startNewGame(opts?: { organId?: string; bloodline?: GeneId | null }): void {
     sfx.init();
+    if (opts?.organId) this.world.startOrganId = opts.organId;
+    if (opts && 'bloodline' in opts) this.world.bloodline = opts.bloodline ?? null;
+    this.world.difficulty = Math.min(this.meta.difficulty, BALANCE.maxDifficulty);
+
     resetWorld(this.world);
+    this.world.player.meta = metaBonuses(this.meta); // 局外属性节点生效
     recalculateStatsAndGenes(this.world);
     this.world.player.hp = this.world.player.maxHp;
+
+    this.runSettled = false;
+    this.lastSettlement = null;
     this.hud.refreshStats();
 
     this.hideAllModals();
@@ -135,10 +153,48 @@ export class Game {
     this.setState('START');
   }
 
+  /** 胜利后选择继续（无尽模式）：不再结算，敌人持续增强 */
+  resumeEndless(): void {
+    this.world.endless = true;
+    byId('gameOverModal').classList.add('hidden');
+    this.setState('PLAYING');
+  }
+
   private hideAllModals(): void {
-    for (const id of ['startModal', 'gameOverModal', 'upgradeModal', 'evolutionModal', 'codexModal', 'pauseModal']) {
+    for (const id of [
+      'startModal', 'gameOverModal', 'upgradeModal', 'evolutionModal',
+      'codexModal', 'pauseModal', 'metaModal', 'runPrepModal',
+    ]) {
       byId(id).classList.add('hidden');
     }
+  }
+
+  /** 胜负统一出口：结算精华（每局仅一次）并展示结算弹窗 */
+  private handleRunEnd(victory: boolean): void {
+    let gained = 0;
+    let unlockedTier: number | null = null;
+    if (!this.runSettled) {
+      this.runSettled = true;
+      const stats: RunStats = {
+        kills: this.world.kills,
+        time: this.world.time,
+        bossesKilled: this.world.bossesKilled,
+        victory,
+        difficulty: this.world.difficulty,
+      };
+      const result = settleRun(this.meta, stats);
+      gained = result.gained;
+      unlockedTier = result.unlockedTier;
+    }
+    this.lastSettlement = { victory, gained, unlockedTier };
+    this.setState('OVER');
+    openSettlement(this, victory, gained, unlockedTier);
+  }
+
+  /** 从祭坛返回时重新展示上一次结算 */
+  private reopenSettlement(): void {
+    const s = this.lastSettlement;
+    if (s) openSettlement(this, s.victory, s.gained, s.unlockedTier);
   }
 
   private wireWorldEvents(): void {
@@ -147,17 +203,18 @@ export class Game {
       onStageEvolution: (stage) => openEvolutionModal(this, stage),
       onStatsChanged: () => this.hud.refreshStats(),
       onBossSpawn: (name) => this.hud.showBossBanner(name),
-      onGameOver: () => {
-        this.setState('OVER');
-        openGameOverModal(this);
-      },
+      onGameOver: () => this.handleRunEnd(false),
+      onVictory: () => this.handleRunEnd(true),
+      onEvent: (label, color) => showEventBanner(label, color),
     };
   }
 
   private wireButtons(): void {
     // 逐个绑定并各自容错：单个节点缺失不影响其余按钮
     const bindings: Array<[string, () => void]> = [
-      ['btnStartGame', () => this.startNewGame()],
+      // 封面开局 → 先进入"择器降世"准备弹窗
+      ['btnStartGame', () => openRunPrep(this, (organId, bloodline) => this.startNewGame({ organId, bloodline }))],
+      // 重开本局 / 再来一局：沿用上一局的起始器官与血脉
       ['btnRestart', () => this.startNewGame()],
       // 封面进入 → 默认看 37 种真身图鉴；局内进入 → 默认看本局构筑
       ['btnOpenCodexStart', () => openCodex(this, 'forms')],
@@ -166,6 +223,12 @@ export class Game {
       ['tabBtnBuild', () => switchCodexTab('build')],
       ['tabBtnForms', () => switchCodexTab('forms')],
       ['tabBtnSynergies', () => switchCodexTab('synergies')],
+      // 吞噬祭坛（局外成长）
+      ['btnOpenMeta', () => openMetaModal(this)],
+      ['btnCloseMeta', () => closeMetaModal()],
+      ['btnSettleMeta', () => openMetaModal(this, () => this.reopenSettlement())],
+      ['btnEndless', () => this.resumeEndless()],
+      ['btnSettleTitle', () => this.backToTitle()],
     ];
     for (const [id, handler] of bindings) {
       const el = document.getElementById(id);

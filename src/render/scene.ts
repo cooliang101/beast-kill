@@ -18,6 +18,8 @@ import {
   bakeTextures,
   BOSS_RING_TEXEL_R,
   BOSS_RING_WORLD_R,
+  ELITE_RING_TEXEL_R,
+  ENEMY_ORB_TEXEL_R,
   GEM_TEXEL_R,
   ICE_SWORD_K,
   MAP_RING_TEXEL_R,
@@ -33,6 +35,7 @@ import type { BakedTextures } from './textures';
 import { drawMythicalBeast } from './painter';
 import { texelRadius, TEXEL } from './pixel';
 import { createMapFeatures } from '../game/world';
+import { AFFIX_COLORS } from '../game/spawn';
 import type { MapFeature } from '../game/world';
 import type { GameState, World } from '../game/types';
 import type { Input } from '../core/input';
@@ -176,6 +179,8 @@ export class GameScene {
   private hpBgPool!: SpritePool;
   private hpFgPool!: SpritePool;
   private bossRingPool!: SpritePool;
+  private eliteRingPool!: SpritePool;
+  private enemyShotPool!: SpritePool;
   private spikePool!: SpritePool;
   private projPool!: SpritePool;
   private projCorePool!: SpritePool;
@@ -245,6 +250,8 @@ export class GameScene {
     this.hpBgPool = new SpritePool(enemyLayer);
     this.hpFgPool = new SpritePool(enemyLayer);
     this.bossRingPool = new SpritePool(enemyLayer);
+    this.eliteRingPool = new SpritePool(enemyLayer);
+    this.enemyShotPool = new SpritePool(fxSpriteLayer);
     this.spikePool = new SpritePool(fxSpriteLayer);
     this.projPool = new SpritePool(fxSpriteLayer);
     this.projCorePool = new SpritePool(fxSpriteLayer);
@@ -298,6 +305,8 @@ export class GameScene {
     this.hpBgPool.begin();
     this.hpFgPool.begin();
     this.bossRingPool.begin();
+    this.eliteRingPool.begin();
+    this.enemyShotPool.begin();
     this.spikePool.begin();
     this.projPool.begin();
     this.projCorePool.begin();
@@ -315,6 +324,7 @@ export class GameScene {
     this.renderZones(world);
     this.renderGems(world, w, h);
     this.renderEnemies(world, w, h);
+    this.renderEnemyShots(world);
     this.renderPlayer(world);
     this.renderFx(world);
     this.renderTexts(world);
@@ -327,6 +337,8 @@ export class GameScene {
     this.hpBgPool.end();
     this.hpFgPool.end();
     this.bossRingPool.end();
+    this.eliteRingPool.end();
+    this.enemyShotPool.end();
     this.spikePool.end();
     this.projPool.end();
     this.projCorePool.end();
@@ -505,6 +517,14 @@ export class GameScene {
         ring.texture = this.textures.bossRing;
         ring.position.set(Math.round(e.x), Math.round(e.y));
         ring.scale.set(BOSS_RING_WORLD_R / BOSS_RING_TEXEL_R);
+      } else if (e.elite) {
+        // 精英词缀环：颜色即词缀
+        const ring = this.eliteRingPool.acquire();
+        ring.texture = this.textures.eliteRing;
+        ring.tint = AFFIX_COLORS[e.affix] ?? '#94a3b8';
+        ring.alpha = 0.9;
+        ring.position.set(Math.round(e.x), Math.round(e.y));
+        ring.scale.set((e.radius * 1.15) / ELITE_RING_TEXEL_R);
       }
 
       if (e.isBoss || e.hp < e.maxHp) {
@@ -530,6 +550,19 @@ export class GameScene {
         fg.scale.set((bw * ratio) / 16, bh / 16);
         fg.tint = e.isBoss ? 0xf43f5e : 0xfb923c;
       }
+    }
+  }
+
+  // ---------------------------------------------------------------- 敌方弹幕
+
+  private renderEnemyShots(world: World): void {
+    for (const s of world.enemyShots) {
+      const sprite = this.enemyShotPool.acquire();
+      sprite.blendMode = 'add';
+      sprite.texture = this.textures.enemyOrb;
+      sprite.tint = s.color;
+      sprite.position.set(Math.round(s.x), Math.round(s.y));
+      sprite.scale.set(s.r / ENEMY_ORB_TEXEL_R);
     }
   }
 

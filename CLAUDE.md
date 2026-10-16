@@ -44,9 +44,14 @@ Boot contract (`Game.init`) is deliberately fault-tolerant and order-sensitive: 
 
 **`src/game/`**:
 - `types.ts` — every hot entity (enemies, projectiles, zones, gems, …) is a pooled plain object; `World` holds all entity arrays plus `pools`, `grid`, `events`, and `view` (viewport size, written by the renderer each frame, read by spawn logic).
-- `world.ts` — `createWorld()` / `resetWorld()` (releases all entities back to pools; player is recreated).
-- `update.ts` — `updateWorld(world, dt, move)`: the whole simulation step. **Ordering is load-bearing** (weapons → orbiting spikes → meteors → tornadoes → zones → projectiles → spawn → enemy loop → separation → gems → effect decay). The grid is built at step start (last-step positions — matches legacy semantics) and rebuilt before separation. Enemy deaths are swept inside the enemy loop (backward splice + pool release).
-- `spawn.ts` — `WILD_TYPES` (5 wild monsters), boss schedule (first at 45s, every 55s), `spawnStressEnemies` for the in-game perf test. `BOSS_TEXTURE_INDEX = 5` links boss spawns to baked textures.
+- `world.ts` — `createWorld()` / `resetWorld()` (releases all entities back to pools; player is recreated). 本局配置（`difficulty`/`startOrganId`/`bloodline`）由 `Game.startNewGame` 在 reset **之前**设置，`resetWorld` 保留它们；`player.meta` 在 reset 之后由 `metaBonuses(save)` 注入。
+- `spawn.ts` — 遭遇系统的核心：`WILD_TYPES`（6 种野生怪 **带行为**）、精英（`spawnElites` + 词缀 applyAffix）、**波次导演**（`generateRunPlan` 生成每局随机剧本、`updateDirector` 推进段位与随机事件、`triggerEvent`）、Boss/宝物妖、难度缩放。`BOSS_TEXTURE_INDEX = WILD_TYPES.length`（动态，加类型自动顺延）。
+- `update.ts` — `updateWorld(world, dt, move)`：整个模拟步。**顺序是承重的**（武器 → 环绕体 → 流星 → 龙卷 → 法阵 → 投射物 → 刷怪（导演在内）→ 敌人行为循环 → 敌方弹幕 → **重建网格** → 治疗光环 → 群体分离 → 经验球 → 衰减）。要点：
+  - 敌人移动由 `behavior` 分支驱动（追击/远程/冲锋状态机/光环/逃跑），冲锋的位移直接施加在状态机里（`moved` 标记跳过通用位移）。
+  - `damagePlayer(world, raw)` 是玩家唯一受伤入口（接触/弹幕/爆裂），返回 true 表示死亡，调用方必须立即 `return`。
+  - `handleEnemyDeath` 负责击杀计数、分裂、爆裂、掉落、Boss 计数与 `checkVictory`。
+  - **治疗光环在网格重建之后运行**（`applyBufferAuras`），因为敌人循环期间会 splice 数组、索引会失效——任何新的"邻居效果"都要跟这个模式走。
+  - `checkVictory`：击败 `victoryBosses` 或存活 `victoryTime` 即通关；`world.endless` 会阻止再次触发。
 
 **`src/combat/`**:
 - `weapons.ts` — the 12-organ switch (`updateWeapons`) + `updateOrbitingSpikes`. Every case ports the legacy numbers exactly; the `spore` case is the `default` (unknown organ ids silently use it).
@@ -65,7 +70,11 @@ Boot contract (`Game.init`) is deliberately fault-tolerant and order-sensitive: 
 - `textures.ts` — 启动时把美术烘焙成**低分辨率**贴图（小画布）：小怪 8 帧行走 + 白色受击帧 + Boss 配色、Boss 警示环、冰剑/四叶风刃/鬼火、爪击月牙、骨剑、粒子与经验球、像素网格与装饰环。法阵类**不烘焙**（半径跨度 50~500，烘焙会破坏颗粒一致性），由 `scene.ts` 用 Graphics + 坐标量化绘制。
 - `scene.ts` — Pixi 图层 + `SpritePool`/`GraphicsPool`/`TextPool`（begin/acquire/end）。高频视觉是精灵，低频动画特效（天雷/激光/触须/流星/龙卷/法阵）是 Graphics，且**顶点量化到 TEXEL 网格 + 方头线帽**（`q()` 与 `steppedCirclePath()`），否则线条会过于平滑而不像素。特效统一 `blendMode = 'add'`。玩家真身每帧绘制到小画布（约 26~44 艺术像素）后 `CanvasSource.update()` 上传。
 
-**`src/ui/`** — DOM overlay, never in the frame loop. `hud.ts` (structural refresh via `onStatsChanged`, numeric refresh with change guards), `modals.ts` (upgrade/evolution/codex/game-over + sandbox cheats + pause menu; opening any modal sets `PAUSED`), `buildPanel.ts` (in-run "current build" codex tab — renders `summarizeBuild` output; all 12 organs/passives shown, unowned dimmed), `previews.ts` (DOM canvas previews), `icons.ts` (organ SVG icons).
+**`src/meta/`** — 局外成长。`save.ts`：`MetaSave` 结构（精华/难度/解锁/属性节点/图鉴点亮）、`loadMeta`/`persistMeta`（localStorage，不可用时自动降级内存，Node 可测）、`computeEssence` + `settleRun`（结算入账与难度解锁）、`metaBonuses`（节点加成，注入 `player.meta`）、`recordFormUse`/`recordSynergy`（图鉴点亮）。改结构要升 `SAVE_VERSION` 并在 `normalize()` 里容忍旧档缺字段。
+
+**`src/ui/meta.ts`** — 祭坛解锁树（购买交互）、开局准备（择器降世：起始器官 + 血脉祝福）、**胜负统一结算弹窗**、随机事件横幅。`src/ui/meta.ts` 从 `modals.ts` 导入 `openPauseMenu`/`showHint`，`modals.ts` 只从 `meta/save.ts` 读数据——保持这个方向，别让 modals 反向 import meta.ts（会成环）。
+
+**`src/ui/`** — DOM overlay，永不进渲染热路径。`hud.ts`（结构刷新走 `onStatsChanged`，数值刷新带变更守卫）、`modals.ts`（升级/进化/图鉴/暂停 + 试炼台；打开任何弹窗都会置 `PAUSED`）、`buildPanel.ts`（本局构筑页签，渲染 `summarizeBuild`）、`previews.ts`（DOM 画布预览）、`icons.ts`（器官 SVG）。结算已迁至 `ui/meta.ts` 的 `openSettlement`。
 
 Modal state machine (in `modals.ts` + `Game.togglePause`): `ESC` pauses during play, resumes when the pause menu is open, and closes the codex otherwise — it deliberately does nothing while the upgrade/evolution modals are open (those are forced choices). The codex is one modal with three tabs (`build` / `forms` / `synergies`); `openCodexFromPause` sets a flag so closing it returns to the pause menu instead of resuming the run. `Game.backToTitle()` resets the world and returns to the start modal.
 
@@ -84,7 +93,10 @@ Modal state machine (in `modals.ts` + `Game.togglePause`): `ESC` pauses during p
 - **Adding a beast form**: reuse existing `archetype`/`horns`/`wings`/`tailStyle` values or extend `painter.ts`; keep `ALL_FORMS.stage2..stage5` at 9 entries each (the evolution UI is "9 choose 3"). Stage arrays and the codex iterate them directly.
 - **Adding an enemy visual**: extend `WILD_TYPES` (with a matching `bakeWildSet` call in `textures.ts`) and keep `Enemy.typeIndex` in sync — the renderer indexes baked frames by it.
 - The simulation deliberately keeps legacy quirks (e.g. `dealDamage` overkills corpses, healing choice text says +12% attack but applies `taotieStacks += 25`). Don't "fix" these silently — they define the game's balance; call them out if they must change.
-- `tests/sim.test.ts` uses a `quietWorld()` helper (disables spawner/boss) — first step otherwise spawns enemies because `spawnTimer` starts at 0.
+- **新的"邻居效果"系统必须走 `applyBufferAuras` 的模式**：敌人循环里会 splice 数组、网格索引失效，因此这类系统要放在**网格重建之后**独立遍历；绝不能在敌人循环内部调用 `grid.queryCircle`。
+- **新增敌人行为**：扩展 `EnemyBehavior` 联合类型 → 在 `update.ts` 的行为 switch 里加分支（保持每帧 O(1)，不要分配）→ 挂到某个 `WILD_TYPE`（或由事件用 `initEnemy` 的 `behavior` 覆盖）。**新增精英词缀**：`EliteAffix` + `applyAffix` + `AFFIX_NAMES`/`AFFIX_COLORS`（颜色会自动用于精英环与图鉴文案）。
+- **局外存档改结构**要升 `SAVE_VERSION` 并在 `save.ts` 的 `normalize()` 里给缺字段兜底；`tests/meta.test.ts` 已覆盖往返/旧档/损坏档。结算每局只入账一次（`Game.runSettled`），无尽续玩不会重复结算。
+- `tests/sim.test.ts` uses a `quietWorld()` helper (disables spawner/boss) — first step otherwise spawns enemies because `spawnTimer` starts at 0. `tests/encounters.test.ts` 的 `quietWorld()` 还会关掉随机事件计时（`director.eventTimer`）以保证可控。
 - **Custom CSS must stay inside `@layer components` in `src/styles.css`.** Tailwind v4 utilities live in a cascade layer, and *unlayered* rules beat layered ones — a custom class setting `display` outside the layer silently defeats `.hidden` (this actually broke the hint toast once). Putting custom classes in the layer keeps utilities able to override them.
 - **New HUD buttons need `pointer-events-auto`.** `#hud` is `pointer-events-none` so the HUD doesn't eat mouse input; without the class a button renders fine but never receives clicks.
 - **UI keeps square corners and hard shadows on purpose** (`rounded-none` everywhere, no `backdrop-blur`, stepped gradients via `repeating-linear-gradient` hard stops). Adding a soft shadow/blur/rounded corner will visibly break the pixel style.

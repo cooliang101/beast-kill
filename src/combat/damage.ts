@@ -15,8 +15,10 @@ export function dealDamage(
 ): void {
   const player = world.player;
   const spiritLv = getPassiveLevel(player, 'spirit');
-  const isCrit = Math.random() < 0.08 + spiritLv * 0.08;
-  const finalDmg = Math.round(amount * player.dmgMult * (isCrit ? 1.85 : 1));
+  const isCrit = Math.random() < 0.08 + spiritLv * 0.08 + player.meta.critAdd;
+  let finalDmg = Math.round(amount * player.dmgMult * (isCrit ? 1.85 : 1));
+  // 重甲/护盾：伤害减免（击退亦免疫）
+  if (enemy.kbImmune && !enemy.isBoss) finalDmg = Math.round(finalDmg * BALANCE.armoredDamageMult);
   enemy.hp -= finalDmg;
   enemy.hurtTimer = 0.12;
 
@@ -29,7 +31,7 @@ export function dealDamage(
     const dx = enemy.x - player.x;
     const dy = enemy.y - player.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    const kb = knockback * (enemy.isBoss ? 0.15 : 1);
+    const kb = knockback * (enemy.isBoss ? 0.15 : enemy.kbImmune ? 0 : 1);
     enemy.x += (dx / len) * kb;
     enemy.y += (dy / len) * kb;
   }

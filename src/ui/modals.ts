@@ -14,7 +14,8 @@ import { generateUpgradeChoices, matchTop3FormsForStage } from '../progression/c
 import type { UpgradeChoice } from '../progression/choices';
 import { handleLevelUp } from '../progression/leveling';
 import { recalculateStatsAndGenes } from '../progression/genes';
-import { spawnStressEnemies } from '../game/spawn';
+import { recordFormUse, recordSynergy } from '../meta/save';
+import { spawnElites, spawnStressEnemies } from '../game/spawn';
 import type { Game } from '../game/game';
 
 function byId(id: string): HTMLElement {
@@ -109,6 +110,7 @@ function applyUpgradeChoice(game: Game, item: UpgradeChoice): void {
   if (item.type === 'synergy') {
     const owned = player.organs.find((o) => o.id === item.organId);
     if (owned) owned.evolved = true;
+    recordSynergy(game.meta, item.organId); // 图鉴点亮：超武觉醒记录
   } else if (item.type === 'active') {
     const owned = player.organs.find((o) => o.id === item.def.id);
     if (owned) owned.level++;
@@ -187,6 +189,7 @@ export function openEvolutionModal(game: Game, targetStage: number): void {
       const player = world.player;
       player.stage = targetStage;
       player.form = f;
+      recordFormUse(game.meta, f.id); // 图鉴点亮：形态选用记录
       recalculateStatsAndGenes(world);
       player.hp = player.maxHp;
       world.shake = 12;
@@ -225,7 +228,7 @@ export function openCodex(game: Game, tab: CodexTab = 'forms'): void {
   prevStateBeforeCodex = game.getState();
   codexReturnToPause = false;
   if (game.getState() === 'PLAYING') game.setState('PAUSED');
-  renderCodex();
+  renderCodex(game);
   renderBuildPanel(game.world);
   switchCodexTab(tab);
   byIdOpt('codexModal')?.classList.remove('hidden');
@@ -309,10 +312,22 @@ export function wirePauseMenu(game: Game): void {
   on('btnPauseTitle', () => game.backToTitle());
 }
 
-function renderCodex(): void {
+function renderCodex(game: Game): void {
   const formsContainer = byIdOpt('codexContentForms');
   if (!formsContainer) return;
   formsContainer.innerHTML = '';
+
+  // 图鉴点亮统计（P2-2）
+  const save = game.meta;
+  const usedForms = save.codexForms;
+  const awakened = save.codexSynergies;
+  const formsLit = ALL_FORMS.stage1.concat(ALL_FORMS.stage2, ALL_FORMS.stage3, ALL_FORMS.stage4, ALL_FORMS.stage5)
+    .filter((f) => (usedForms[f.id] ?? 0) > 0).length;
+  const synLit = ACTIVE_ORGANS.filter((o) => (awakened[o.id] ?? 0) > 0).length;
+  const sub = document.querySelector('#codexModal p.text-xs');
+  if (sub) {
+    sub.textContent = `收集度：形态 ${formsLit}/37 · 超武 ${synLit}/12 · 5大进化阶级（37种真身）与12组基因联动超武配方`;
+  }
 
   const stageTitles: Record<number, string> = {
     1: '一阶 · 洪荒初始幼兽 (Lv.1)',
@@ -335,17 +350,22 @@ function renderCodex(): void {
       const tagsHtml = f.tags
         .map((t) => `<span class="badge-nowrap px-1.5 py-0.5 rounded-none text-[10px] font-bold" style="background:${GENE_TAGS[t].bg};color:${GENE_TAGS[t].color}">[${GENE_TAGS[t].name}]</span>`)
         .join('');
+      const uses = usedForms[f.id] ?? 0;
+      const litBadge = uses > 0
+        ? `<span class="badge-nowrap px-1.5 py-0.5 rounded-none text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">已化身 ×${uses}</span>`
+        : `<span class="badge-nowrap px-1.5 py-0.5 rounded-none text-[10px] font-bold bg-slate-800/70 text-slate-500 border border-slate-600/30">未化身</span>`;
       const card = document.createElement('div');
-      card.className = 'bg-slate-900/90 border border-amber-500/25 rounded-none p-3 flex items-center gap-3';
+      card.className = `bg-slate-900/90 border ${uses > 0 ? 'border-emerald-500/30' : 'border-amber-500/25'} rounded-none p-3 flex items-center gap-3`;
       card.innerHTML = `
         <canvas id="codex_cvs_${f.id}" width="92" height="92" class="w-20 h-20 rounded-none bg-slate-950 border border-amber-500/20 shrink-0"></canvas>
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-1">
             <span class="font-bold text-amber-200 text-base truncate">${f.name}</span>
-            <div class="flex gap-1 shrink-0">${tagsHtml}</div>
+            <div class="flex gap-1 shrink-0">${litBadge}</div>
           </div>
           <div class="text-[11px] text-amber-400/80 mb-1">${f.title}</div>
           <div class="text-[11px] text-slate-300 leading-snug"><b class="text-emerald-300">${f.skillName}：</b>${f.skillDesc}</div>
+          <div class="flex gap-1 mt-1">${tagsHtml}</div>
         </div>
       `;
       grid.appendChild(card);
@@ -364,11 +384,18 @@ function renderCodex(): void {
   synGrid.innerHTML = '';
   ACTIVE_ORGANS.forEach((act) => {
     const pas = PASSIVE_GENES.find((p) => p.id === act.pairPassive);
+    const times = awakened[act.id] ?? 0;
+    const litBadge = times > 0
+      ? `<span class="badge-nowrap px-1.5 py-0.5 rounded-none text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">已觉醒 ×${times}</span>`
+      : `<span class="badge-nowrap px-1.5 py-0.5 rounded-none text-[10px] font-bold bg-slate-800/70 text-slate-500 border border-slate-600/30">未觉醒</span>`;
     const div = document.createElement('div');
-    div.className = 'bg-slate-900/90 border border-amber-500/35 rounded-none p-4 flex flex-col justify-between';
+    div.className = `bg-slate-900/90 border ${times > 0 ? 'border-emerald-500/35' : 'border-amber-500/35'} rounded-none p-4 flex flex-col justify-between`;
     div.innerHTML = `
       <div>
-        <div class="text-xs font-bold text-amber-400 mb-2">🔥 基因联动超武配方</div>
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="text-xs font-bold text-amber-400">🔥 基因联动超武配方</div>
+          ${litBadge}
+        </div>
         <div class="flex items-center gap-2 mb-3 bg-slate-950/90 p-2.5 rounded-none border border-amber-500/20 flex-wrap">
           <span class="badge-nowrap text-xs font-bold text-amber-200">${act.name} (Lv.5)</span>
           <span class="text-amber-400 font-bold">+</span>
@@ -382,24 +409,6 @@ function renderCodex(): void {
   });
 
   drawCodexPreviews(allForms);
-}
-
-// ---------------------------------------------------------------- 结算
-
-export function openGameOverModal(game: Game): void {
-  const world = game.world;
-  const modal = byId('gameOverModal');
-  modal.classList.remove('hidden');
-
-  drawEndPreview(world.player.form);
-
-  const mins = String(Math.floor(world.time / 60)).padStart(2, '0');
-  const secs = String(Math.floor(world.time % 60)).padStart(2, '0');
-  byId('endStats').innerHTML = `
-    <div class="flex justify-between"><span>最终山海真身：</span><b class="text-amber-300">${world.player.form.name} (${world.player.stage}阶 · Lv.${world.player.level})</b></div>
-    <div class="flex justify-between"><span>存活洪荒纪元：</span><b class="text-emerald-300">${mins}分${secs}秒</b></div>
-    <div class="flex justify-between"><span>吞噬荒兽总数：</span><b class="text-rose-300">${world.kills} 只</b></div>
-  `;
 }
 
 // ---------------------------------------------------------------- 试炼台
@@ -452,5 +461,18 @@ export function wireSandbox(game: Game): void {
   on('btnCheatStress', () => {
     if (game.getState() !== 'PLAYING') return;
     spawnStressEnemies(game.world, BALANCE.stressSpawnCount);
+  });
+
+  // 引 5 只精英：验证精英词缀与视觉
+  on('btnCheatElite', () => {
+    if (game.getState() !== 'PLAYING') return;
+    spawnElites(game.world, 5, 420);
+  });
+
+  // 立即通关：验证胜利结算与精华入账
+  on('btnCheatWin', () => {
+    if (game.getState() !== 'PLAYING') return;
+    game.world.bossesKilled = BALANCE.victoryBosses;
+    game.world.events.onVictory?.();
   });
 }

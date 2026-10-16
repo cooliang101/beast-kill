@@ -1,0 +1,27 @@
+{
+  "name": "beast-kill",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "山海吞噬录：万兽基因谱 — 网页端高密度单位生存进化游戏",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "node tools/smoke.mjs"
+  },
+  "dependencies": {
+    "pixi.js": "^8.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "playwright": "^1.64.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.0.0"
+  }
+}

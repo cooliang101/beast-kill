@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   全局基础（不放入 @layer：需要保持最强优先级）
+   ============================================================================ */
+* { user-select: none; -webkit-user-select: none; box-sizing: border-box; }
+body, html {
+  margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+  background-color: #05050a;
+  font-family: 'Noto Serif SC', 'PingFang SC', 'Microsoft YaHei', serif;
+  color: #f3efe6;
+}
+canvas { display: block; }
+
+/* PixiJS 挂载容器 */
+#game-root {
+  position: fixed;
+  inset: 0;
+}
+#game-root canvas { width: 100% !important; height: 100% !important; }
+
+/* 操作提示浮层 */
+#hintToast { animation: hintPop 0.18s ease-out; }
+@keyframes hintPop {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes shineSweep { 100% { left: 200%; } }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(10, 10, 18, 0.8); }
+::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.5); border-radius: 3px; }
+
+/* ============================================================================
+   组件类（放入 components 层：Tailwind 工具类必须能覆盖它们。
+   否则如 .badge-nowrap 的 display 会压过 .hidden，导致元素无法隐藏）
+   ============================================================================ */
+@layer components {
+  .font-calligraphy { font-family: 'Ma Shan Zheng', cursive, serif; }
+
+  /* 洪荒暗金鎏金UI边框与底纹 */
+  .myth-panel {
+    background: radial-gradient(circle at 50% 0%, rgba(35, 28, 52, 0.95) 0%, rgba(12, 10, 20, 0.98) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.85), inset 0 0 20px rgba(212, 175, 55, 0.1);
+    backdrop-filter: blur(10px);
+    position: relative;
+  }
+  .myth-panel::before {
+    content: ''; position: absolute; inset: 3px;
+    border: 1px solid rgba(212, 175, 55, 0.14);
+    pointer-events: none; border-radius: inherit;
+  }
+
+  /* 进化与升级卡牌特效 */
+  .evo-card {
+    background: linear-gradient(165deg, rgba(32, 26, 48, 0.96) 0%, rgba(14, 12, 24, 0.98) 65%, rgba(28, 20, 38, 0.96) 100%);
+    border: 1px solid rgba(180, 150, 90, 0.4);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .evo-card:hover {
+    transform: translateY(-6px);
+    border-color: #f5d061;
+    box-shadow: 0 16px 35px rgba(0, 0, 0, 0.9), 0 0 22px rgba(245, 208, 97, 0.3);
+  }
+
+  .synergy-card {
+    background: linear-gradient(165deg, rgba(65, 28, 16, 0.96) 0%, rgba(24, 10, 14, 0.98) 60%, rgba(55, 35, 10, 0.96) 100%);
+    border: 2px solid #fbbf24;
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.45), inset 0 0 20px rgba(251, 191, 36, 0.2);
+  }
+
+  /* 徽章强制单行不折行 */
+  .badge-nowrap {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+  }
+
+  /* 进度条流光 */
+  .bar-shine { position: relative; overflow: hidden; }
+  .bar-shine::after {
+    content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+    animation: shineSweep 2.6s infinite;
+  }
+
+  /* 自定义渐变（替代 Tailwind 渐变工具类，规避 v3/v4 命名差异） */
+  .bar-exp { background: linear-gradient(90deg, #059669, #2dd4bf, #fcd34d); }
+  .bar-hp { background: linear-gradient(90deg, #be123c, #ef4444, #fb923c); }
+  .btn-gold {
+    background: linear-gradient(90deg, #d97706, #f59e0b, #eab308);
+    transition: background 0.2s ease;
+  }
+  .btn-gold:hover { background: linear-gradient(90deg, #f59e0b, #eab308); }
+  .title-gold {
+    background: linear-gradient(180deg, #fef3c7, #fcd34d, #d97706);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .title-gold-h {
+    background: linear-gradient(90deg, #fde68a, #fde047, #fb923c);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}

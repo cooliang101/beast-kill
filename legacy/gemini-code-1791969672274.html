@@ -1,0 +1,3047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>山海吞噬录：万兽基因谱 · 丝滑帧率特效版</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@600;900&display=swap" rel="stylesheet">
+<style>
+  * { user-select: none; -webkit-user-select: none; box-sizing: border-box; }
+  body, html {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background-color: #05050a;
+    font-family: 'Noto Serif SC', 'PingFang SC', 'Microsoft YaHei', serif;
+    color: #f3efe6;
+  }
+  .font-calligraphy { font-family: 'Ma Shan Zheng', cursive, serif; }
+  canvas { display: block; }
+
+  /* 洪荒暗金鎏金UI边框与底纹 */
+  .myth-panel {
+    background: radial-gradient(circle at 50% 0%, rgba(35, 28, 52, 0.95) 0%, rgba(12, 10, 20, 0.98) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.85), inset 0 0 20px rgba(212, 175, 55, 0.1);
+    backdrop-filter: blur(10px);
+    position: relative;
+  }
+  .myth-panel::before {
+    content: ''; position: absolute; inset: 3px;
+    border: 1px solid rgba(212, 175, 55, 0.14);
+    pointer-events: none; border-radius: inherit;
+  }
+
+  /* 进化与升级卡牌特效 */
+  .evo-card {
+    background: linear-gradient(165deg, rgba(32, 26, 48, 0.96) 0%, rgba(14, 12, 24, 0.98) 65%, rgba(28, 20, 38, 0.96) 100%);
+    border: 1px solid rgba(180, 150, 90, 0.4);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.15);
+    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .evo-card:hover {
+    transform: translateY(-6px);
+    border-color: #f5d061;
+    box-shadow: 0 16px 35px rgba(0, 0, 0, 0.9), 0 0 22px rgba(245, 208, 97, 0.3);
+  }
+
+  .synergy-card {
+    background: linear-gradient(165deg, rgba(65, 28, 16, 0.96) 0%, rgba(24, 10, 14, 0.98) 60%, rgba(55, 35, 10, 0.96) 100%);
+    border: 2px solid #fbbf24;
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.45), inset 0 0 20px rgba(251, 191, 36, 0.2);
+  }
+
+  /* 徽章强制单行不折行 */
+  .badge-nowrap {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+  }
+
+  /* 进度条流光 */
+  .bar-shine { position: relative; overflow: hidden; }
+  .bar-shine::after {
+    content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+    animation: shineSweep 2.6s infinite;
+  }
+  @keyframes shineSweep { 100% { left: 200%; } }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(10, 10, 18, 0.8); }
+  ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.5); border-radius: 3px; }
+</style>
+</head>
+<body class="relative select-none">
+
+<!-- 主战斗画布 -->
+<canvas id="gameCanvas" class="w-full h-full"></canvas>
+
+<!-- 顶部 HUD -->
+<div id="hud" class="fixed top-0 left-0 right-0 p-3 md:p-4 pointer-events-none flex flex-col gap-2 z-20 hidden">
+  <div class="w-full max-w-6xl mx-auto flex items-center gap-3">
+    <div class="myth-panel px-3.5 py-1.5 rounded-lg flex items-center gap-2 shrink-0">
+      <span id="hudStageBadge" class="badge-nowrap text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40">一阶幼兽</span>
+      <span id="hudFormName" class="badge-nowrap text-base md:text-lg font-bold text-amber-100 tracking-wider font-calligraphy">混沌幼崽</span>
+      <span id="hudLevel" class="badge-nowrap text-sm font-bold text-emerald-400 ml-1">Lv.1</span>
+    </div>
+
+    <!-- 吞噬基因经验槽 -->
+    <div class="flex-1 h-5 bg-slate-950/90 rounded-full p-0.5 border border-amber-500/40 shadow-inner relative overflow-hidden">
+      <div id="expBar" class="h-full bg-gradient-to-r from-emerald-600 via-teal-400 to-amber-300 rounded-full transition-all duration-150 bar-shine" style="width: 0%"></div>
+      <div id="expText" class="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white drop-shadow truncate px-2">
+        吞噬基因：0 / 18 (下一阶进化: Lv.5)
+      </div>
+    </div>
+
+    <!-- 计时与功能按钮 -->
+    <div class="myth-panel px-3 py-1.5 rounded-lg flex items-center gap-3 shrink-0 text-xs md:text-sm">
+      <div class="flex items-center gap-1 badge-nowrap">
+        <span class="text-amber-400">⏳</span>
+        <span id="hudTimer" class="font-mono font-bold text-amber-100">00:00</span>
+      </div>
+      <div class="flex items-center gap-1 badge-nowrap">
+        <span class="text-rose-400">💀</span>
+        <span id="hudKills" class="font-mono font-bold text-rose-200">0</span>
+      </div>
+      <button id="btnSandboxToggle" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded bg-purple-600/30 hover:bg-purple-500/50 border border-purple-400/60 text-purple-200 text-xs font-bold transition cursor-pointer">
+        ✨ 神通试炼台
+      </button>
+      <button id="btnOpenCodexHud" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/40 border border-amber-400/50 text-amber-200 text-xs font-bold transition cursor-pointer">
+        📜 万兽图鉴
+      </button>
+    </div>
+  </div>
+
+  <!-- 第二栏：生命值、9大基因亲和度实时面板 -->
+  <div class="w-full max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
+    <div class="myth-panel px-3 py-1.5 rounded-lg flex items-center gap-3 min-w-[230px]">
+      <div class="text-xs font-bold text-rose-400 badge-nowrap">气血</div>
+      <div class="w-36 h-3.5 bg-slate-950 rounded-full overflow-hidden border border-rose-500/40 relative">
+        <div id="hpBar" class="h-full bg-gradient-to-r from-rose-700 via-red-500 to-orange-400 transition-all duration-150" style="width: 100%"></div>
+        <span id="hpText" class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">130 / 130</span>
+      </div>
+    </div>
+
+    <div id="geneAffinityBar" class="myth-panel px-3 py-1 rounded-lg flex items-center gap-1.5 flex-wrap">
+      <span class="text-[11px] text-amber-300/80 mr-1 font-bold badge-nowrap">基因亲和:</span>
+    </div>
+  </div>
+
+  <!-- 神通试炼快捷抽屉（方便一键测试所有超武与五阶形态） -->
+  <div id="sandboxPanel" class="w-full max-w-6xl mx-auto myth-panel p-2.5 rounded-xl pointer-events-auto hidden flex-wrap items-center justify-between gap-2 border border-purple-400/50">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs font-bold text-purple-300 badge-nowrap">⚡ 试炼快捷指令：</span>
+      <button id="btnCheatLvUp" class="badge-nowrap px-2.5 py-1 rounded bg-emerald-600/30 hover:bg-emerald-500/50 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer">🔼 立即升1级</button>
+      <button id="btnCheatNextStage" class="badge-nowrap px-2.5 py-1 rounded bg-amber-600/30 hover:bg-amber-500/50 border border-amber-400/50 text-amber-200 text-xs font-bold cursor-pointer">🐉 跃迁下一阶真身</button>
+      <button id="btnCheatUnlockSynergy" class="badge-nowrap px-2.5 py-1 rounded bg-rose-600/30 hover:bg-rose-500/50 border border-rose-400/50 text-rose-200 text-xs font-bold cursor-pointer">🔥 一键觉醒当前超武</button>
+      <button id="btnCheatAllSynergy" class="badge-nowrap px-2.5 py-1 rounded bg-yellow-500/30 hover:bg-yellow-400/50 border border-yellow-300/60 text-yellow-200 text-xs font-bold cursor-pointer">🌟 满配6大超武神装</button>
+    </div>
+    <span class="text-[11px] text-slate-400 badge-nowrap">提示：已全面优化渲染管线，满屏超武依然保持60帧丝滑！</span>
+  </div>
+
+  <!-- 左下角：当前体内器官与被动基因槽位 -->
+  <div class="fixed bottom-3 left-3 flex flex-col gap-1.5 pointer-events-none z-20">
+    <div class="myth-panel p-2 rounded-lg flex items-center gap-1.5" id="activeOrgansHud">
+      <span class="text-[10px] text-amber-300/80 px-1 border-r border-amber-500/30 badge-nowrap">攻击器官</span>
+      <div id="activeSlots" class="flex items-center gap-1.5"></div>
+    </div>
+    <div class="myth-panel p-2 rounded-lg flex items-center gap-1.5" id="passiveGenesHud">
+      <span class="text-[10px] text-cyan-300/80 px-1 border-r border-cyan-500/30 badge-nowrap">突变基因</span>
+      <div id="passiveSlots" class="flex items-center gap-1.5"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Boss 警告横幅 -->
+<div id="bossWarning" class="fixed top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none hidden">
+  <div class="myth-panel px-8 py-3 rounded-xl border-2 border-red-500 bg-red-950/90 flex items-center gap-4 animate-bounce">
+    <span class="text-3xl">⚠️</span>
+    <div>
+      <div class="text-xs text-red-300 tracking-widest font-bold badge-nowrap">洪荒霸主降临 · 吞噬其真血可获海量进化基因</div>
+      <div id="bossNameText" class="text-2xl font-calligraphy text-amber-200 badge-nowrap">太古凶兽·混沌穷奇</div>
+    </div>
+  </div>
+</div>
+
+<!-- 封面主菜单 -->
+<div id="startModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+  <div class="myth-panel max-w-4xl w-full rounded-2xl p-6 md:p-10 border-2 border-amber-500/50 flex flex-col items-center text-center relative overflow-hidden">
+    <div class="text-xs md:text-sm tracking-[0.35em] text-amber-400/90 font-bold mb-2">SHANHAI DEVOURER · MYTHICAL EVOLUTION</div>
+    <h1 class="text-4xl md:text-6xl font-calligraphy text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 mb-3">
+      山海吞噬录：万兽基因谱
+    </h1>
+    <p class="text-xs md:text-sm text-amber-100/80 max-w-2xl leading-relaxed mb-5">
+      化身洪荒初始【混沌幼崽】，吞噬万兽精血，融合 <span class="text-amber-300 font-bold">24种太古器官与突变基因</span>，解锁 <span class="text-rose-400 font-bold">12种毁天灭地的双器官超武共鸣</span>。每一次阶级跃迁，系统将根据你体内的<span class="text-emerald-300 font-bold">九大基因亲和度权重</span>，从当前阶级的 <span class="text-amber-300 font-bold">9种山海神话真身（共5阶37种形态）</span> 中感应匹配最契合的 3 种供你蜕变！
+    </p>
+
+    <!-- 封面动态异兽预览画布 -->
+    <div class="relative w-full max-w-2xl h-44 md:h-52 rounded-xl bg-slate-950/90 border border-amber-500/30 mb-6 flex items-center justify-center overflow-hidden shadow-inner">
+      <canvas id="heroPreviewCanvas" width="680" height="210" class="w-full h-full"></canvas>
+      <div class="absolute bottom-2 right-3 text-[11px] text-amber-300/70">实时骨骼渲染：混沌幼崽 ➔ 疾风魔狼 ➔ 九天雷鹏 ➔ 太古应龙 ➔ 烛龙创世</div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-4">
+      <button id="btnStartGame" class="px-10 py-3.5 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 font-black text-lg tracking-wider shadow-lg transition transform hover:scale-105 cursor-pointer">
+        🔥 破壳降世 · 开始吞噬
+      </button>
+      <button id="btnOpenCodexStart" class="px-6 py-3.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-amber-400/50 text-amber-200 font-bold text-base transition cursor-pointer">
+        📜 万兽进化图鉴 & 联动配方
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 升级：基因与器官三选一弹窗（修复徽章挤压折行问题） -->
+<div id="upgradeModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 hidden">
+  <div class="myth-panel max-w-5xl w-full rounded-2xl p-6 md:p-8 border-2 border-amber-500/50 flex flex-col items-center">
+    <div class="text-xs tracking-[0.25em] text-emerald-400 font-bold mb-1">GENE MUTATION & ORGAN ASSIMILATION</div>
+    <h2 id="upgradeTitle" class="text-3xl md:text-4xl font-calligraphy text-amber-200 mb-1">基因吞噬 · 器官突变</h2>
+    <p id="upgradeSubtitle" class="text-xs md:text-sm text-slate-300 mb-6 text-center">选择一项器官或突变基因融入真身（影响下一阶形态进化的基因亲和度）</p>
+
+    <div id="upgradeCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-5 w-full"></div>
+  </div>
+</div>
+
+<!-- 阶段进化：9选3基因匹配真身弹窗 -->
+<div id="evolutionModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+  <div class="myth-panel max-w-5xl w-full rounded-2xl p-6 md:p-8 border-2 border-amber-400 flex flex-col items-center">
+    <div class="text-xs tracking-[0.3em] text-amber-400 font-bold mb-1">BLOODLINE AWAKENING · 基因共鸣跃迁</div>
+    <h2 id="evoStageTitle" class="text-3xl md:text-5xl font-calligraphy text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-300 to-orange-400 mb-2">
+      二阶荒古凶兽 · 血脉觉醒
+    </h2>
+    <p id="evoMatchInfo" class="text-xs md:text-sm text-amber-100/80 mb-6 text-center max-w-2xl">
+      系统已根据你体内的【九大基因亲和度权重】，从本阶 9 种山海真身中感应出最契合的 3 种形态：
+    </p>
+
+    <div id="evoCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-5 w-full"></div>
+  </div>
+</div>
+
+<!-- 万兽进化图鉴 & 基因联动表 弹窗 -->
+<div id="codexModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+  <div class="myth-panel max-w-6xl w-full h-[88vh] rounded-2xl p-5 md:p-7 border-2 border-amber-500/50 flex flex-col">
+    <div class="flex flex-wrap items-center justify-between border-b border-amber-500/30 pb-3 mb-4 gap-2">
+      <div>
+        <h2 class="text-2xl md:text-3xl font-calligraphy text-amber-300">📜 山海万兽图鉴 & 器官超武共鸣录</h2>
+        <p class="text-xs text-slate-400 mt-0.5">实时骨骼矢量渲染 · 5大进化阶级（37种真身）与12组基因联动超武配方</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="tabBtnForms" class="badge-nowrap px-4 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer">🐉 37种山海真身</button>
+        <button id="tabBtnSynergies" class="badge-nowrap px-4 py-1.5 rounded-lg bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer">🔥 12组联动超武配方</button>
+        <button id="btnCloseCodex" class="badge-nowrap ml-2 px-3 py-1.5 rounded-lg bg-rose-900/60 hover:bg-rose-700 text-rose-200 border border-rose-500/40 text-xs md:text-sm font-bold cursor-pointer">✕ 关闭</button>
+      </div>
+    </div>
+
+    <div id="codexContentForms" class="flex-1 overflow-y-auto pr-2 space-y-6"></div>
+    <div id="codexContentSynergies" class="flex-1 overflow-y-auto pr-2 hidden">
+      <div id="synergyListGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 结算弹窗 -->
+<div id="gameOverModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
+  <div class="myth-panel max-w-lg w-full rounded-2xl p-8 border-2 border-amber-500/50 flex flex-col items-center text-center">
+    <h2 id="endTitle" class="text-4xl font-calligraphy text-amber-300 mb-2">洪荒陨落 · 身死道消</h2>
+    <p id="endSubtitle" class="text-sm text-slate-300 mb-5">你的血肉重归山海大地，等待下一次轮回破壳</p>
+    <canvas id="endFormPreview" width="160" height="160" class="mb-4 rounded-full bg-slate-950/90 border border-amber-500/40"></canvas>
+    <div id="endStats" class="w-full bg-slate-900/80 rounded-xl p-4 border border-amber-500/20 text-sm space-y-2 mb-6"></div>
+    <button id="btnRestart" class="px-8 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 text-slate-950 font-black text-base tracking-wider shadow-lg hover:scale-105 transition cursor-pointer">
+      🔄 重入轮回 · 再次吞噬
+    </button>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+// 1. 九大基因标签体系与配色定义
+// ============================================================================
+const GENE_TAGS = {
+  wind:    { id: 'wind',    name: '风', color: '#34d399', glow: '#10b981', bg: 'rgba(16,185,129,0.2)', desc: '急速、裂空风刃' },
+  fire:    { id: 'fire',    name: '火', color: '#fb923c', glow: '#ef4444', bg: 'rgba(239,68,68,0.2)',  desc: '焚烧、熔岩爆炎' },
+  thunder: { id: 'thunder', name: '雷', color: '#facc15', glow: '#eab308', bg: 'rgba(234,179,8,0.2)',  desc: '天罚、连锁雷暴' },
+  poison:  { id: 'poison',  name: '毒', color: '#a3e635', glow: '#65a30d', bg: 'rgba(132,204,22,0.2)', desc: '瘟疫、腐蚀蛛网' },
+  blood:   { id: 'blood',   name: '血', color: '#f43f5e', glow: '#e11d48', bg: 'rgba(225,29,72,0.2)',  desc: '嗜血、狂暴斩杀' },
+  ice:     { id: 'ice',     name: '冰', color: '#38bdf8', glow: '#0284c7', bg: 'rgba(14,165,233,0.2)', desc: '霜冻、极寒冰晶' },
+  rock:    { id: 'rock',    name: '岩', color: '#d6d3d1', glow: '#a8a29e', bg: 'rgba(168,162,158,0.2)',desc: '玄甲、大地践踏' },
+  dark:    { id: 'dark',    name: '暗', color: '#c084fc', glow: '#9333ea', bg: 'rgba(147,51,234,0.2)', desc: '归墟、引力黑洞' },
+  phantom: { id: 'phantom', name: '幻', color: '#f472b6', glow: '#db2777', bg: 'rgba(236,72,153,0.2)', desc: '妖瞳、幻影分身' }
+};
+
+// ============================================================================
+// 2. 五大进化阶级 · 37种山海神话异兽定义
+// ============================================================================
+const ALL_FORMS = {
+  stage1: [
+    {
+      id: 'chaos_cub', stage: 1, name: '混沌幼崽', title: '洪荒初生·万兽之源',
+      tags: ['dark', 'blood'],
+      archetype: 'cub', primary: '#9333ea', secondary: '#f472b6', accent: '#fde047', eyeColor: '#fef08a',
+      horns: 'stub', wings: 'none', tails: 1, tailStyle: 'fluffy', aura: 'chaos',
+      stats: { hp: 130, speed: 3.4, dmgMult: 1.0, armor: 0 },
+      skillName: '混沌撕咬', skillDesc: '周期性向最近猎物挥出三连混沌爪影，吞噬基因球范围+25%。'
+    }
+  ],
+  stage2: [
+    {
+      id: 'gale_wolf', stage: 2, name: '疾风魔狼', title: '二阶凶兽·裂风掠食者',
+      tags: ['wind', 'blood'],
+      archetype: 'wolf', primary: '#059669', secondary: '#6ee7b7', accent: '#ecfdf5', eyeColor: '#34d399',
+      horns: 'swept', wings: 'wind_fins', tails: 1, tailStyle: 'wolf', aura: 'wind',
+      stats: { hp: 220, speed: 4.1, dmgMult: 1.25, armor: 2 },
+      skillName: '朔风新月斩', skillDesc: '疾奔时周期性挥出穿透敌群的翠绿新月风刃与旋风斩。'
+    },
+    {
+      id: 'magma_drake', stage: 2, name: '熔岩巨蜥', title: '二阶凶兽·地心炎兽',
+      tags: ['fire', 'rock'],
+      archetype: 'drake', primary: '#b91c1c', secondary: '#fb923c', accent: '#fef08a', eyeColor: '#fde047',
+      horns: 'crown_spikes', wings: 'none', tails: 1, tailStyle: 'spiked_heavy', aura: 'fire',
+      stats: { hp: 310, speed: 3.2, dmgMult: 1.3, armor: 8 },
+      skillName: '大地熔火径', skillDesc: '召唤天火流星砸向敌群，并在地面留下持续焚烧的熔岩火海。'
+    },
+    {
+      id: 'abyss_spider', stage: 2, name: '深渊毒蛛', title: '二阶凶兽·八足瘟神',
+      tags: ['poison', 'dark'],
+      archetype: 'spider', primary: '#3f6212', secondary: '#a3e635', accent: '#c084fc', eyeColor: '#bef264',
+      horns: 'mandibles', wings: 'none', tails: 0, tailStyle: 'none', aura: 'poison',
+      stats: { hp: 240, speed: 3.5, dmgMult: 1.25, armor: 4 },
+      skillName: '剧毒腐蚀网', skillDesc: '向四周展开八角剧毒蛛网阵，大幅减速猎物并造成持续毒爆。'
+    },
+    {
+      id: 'frost_fox', stage: 2, name: '玄冰妖狐', title: '二阶凶兽·极北雪魅',
+      tags: ['ice', 'phantom'],
+      archetype: 'wolf', primary: '#0284c7', secondary: '#bae6fd', accent: '#f472b6', eyeColor: '#7dd3fc',
+      horns: 'fox_ears', wings: 'none', tails: 3, tailStyle: 'fox', aura: 'ice',
+      stats: { hp: 210, speed: 3.9, dmgMult: 1.28, armor: 2 },
+      skillName: '凛冬冰魄剑', skillDesc: '三尾摇曳齐射六棱寒冰飞剑，冻结敌人并绽放冰晶雪花阵。'
+    },
+    {
+      id: 'berserk_bear', stage: 2, name: '狂暴战熊', title: '二阶凶兽·裂地巨力',
+      tags: ['blood', 'rock'],
+      archetype: 'drake', primary: '#7f1d1d', secondary: '#f43f5e', accent: '#fca5a5', eyeColor: '#f87171',
+      horns: 'bear_ears', wings: 'none', tails: 1, tailStyle: 'stub', aura: 'blood',
+      stats: { hp: 350, speed: 3.2, dmgMult: 1.35, armor: 10 },
+      skillName: '撼地血怒震', skillDesc: '重踏大地引发放射状岩石地裂尖刺，震退周围敌群并恢复气血。'
+    },
+    {
+      id: 'thunder_eel', stage: 2, name: '雷鸣电鳗', title: '二阶凶兽·沧海雷蛇',
+      tags: ['thunder', 'wind'],
+      archetype: 'serpent', primary: '#ca8a04', secondary: '#fef08a', accent: '#38bdf8', eyeColor: '#fef9c3',
+      horns: 'feeler', wings: 'fin_wings', tails: 1, tailStyle: 'eel', aura: 'thunder',
+      stats: { hp: 230, speed: 3.8, dmgMult: 1.3, armor: 3 },
+      skillName: '高压分形电弧', skillDesc: '周身环绕跳跃分形电弧，自动电击并麻痹靠近的多个目标。'
+    },
+    {
+      id: 'bastion_turtle', stage: 2, name: '磐石巨龟', title: '二阶凶兽·不动山岳',
+      tags: ['rock', 'ice'],
+      archetype: 'turtle', primary: '#57534e', secondary: '#a8a29e', accent: '#38bdf8', eyeColor: '#e7e5e4',
+      horns: 'stub', wings: 'none', tails: 1, tailStyle: 'spiked_heavy', aura: 'rock',
+      stats: { hp: 400, speed: 3.0, dmgMult: 1.2, armor: 16 },
+      skillName: '玄甲荆棘震', skillDesc: '硬化甲壳减免伤害，并周期性向八方破土刺出岩石尖峰。'
+    },
+    {
+      id: 'vampire_bat', stage: 2, name: '噬血魔蝠', title: '二阶凶兽·暗夜血翼',
+      tags: ['blood', 'dark'],
+      archetype: 'bat', primary: '#881337', secondary: '#fb7185', accent: '#c084fc', eyeColor: '#fda4af',
+      horns: 'bat_ears', wings: 'bat_wings', tails: 1, tailStyle: 'whip', aura: 'blood',
+      stats: { hp: 215, speed: 4.0, dmgMult: 1.28, armor: 2 },
+      skillName: '超声波血环', skillDesc: '释放多层律动腥红声波环，造成范围切割伤害并汲取生命。'
+    },
+    {
+      id: 'phantom_cat', stage: 2, name: '幻影灵猫', title: '二阶凶兽·九命幽影',
+      tags: ['phantom', 'wind'],
+      archetype: 'wolf', primary: '#831843', secondary: '#f472b6', accent: '#c084fc', eyeColor: '#fbcfe8',
+      horns: 'fox_ears', wings: 'ribbon', tails: 2, tailStyle: 'whip', aura: 'phantom',
+      stats: { hp: 205, speed: 4.2, dmgMult: 1.32, armor: 2 },
+      skillName: '幽冥分身斩', skillDesc: '在猎物群中投射交叉幻影剑芒，造成高频暴击切割。'
+    }
+  ],
+  stage3: [
+    {
+      id: 'thunder_roc', stage: 3, name: '九天雷鹏', title: '三阶灵兽·扶摇九万里',
+      tags: ['thunder', 'wind'],
+      archetype: 'bird', primary: '#d97706', secondary: '#fef08a', accent: '#38bdf8', eyeColor: '#ffffff',
+      horns: 'crest_gold', wings: 'feathered_large', tails: 3, tailStyle: 'peacock', aura: 'thunder',
+      stats: { hp: 420, speed: 4.4, dmgMult: 1.65, armor: 6 },
+      skillName: '九霄紫电链', skillDesc: '双翼扇动引落分形金色闪电链，在敌群间高速弹射并留下雷印。'
+    },
+    {
+      id: 'qiongqi_beast', stage: 3, name: '穷奇凶兽', title: '三阶灵兽·四凶之首',
+      tags: ['blood', 'wind'],
+      archetype: 'wolf', primary: '#9f1239', secondary: '#fb7185', accent: '#fde047', eyeColor: '#fecdd3',
+      horns: 'demon_curved', wings: 'bat_wings', tails: 1, tailStyle: 'spiked_heavy', aura: 'blood',
+      stats: { hp: 460, speed: 4.0, dmgMult: 1.75, armor: 10 },
+      skillName: '十方戮神剑气', skillDesc: '咆哮释放八方腥红月牙剑气，命中流血猎物时恢复自身气血。'
+    },
+    {
+      id: 'yamata_serpent', stage: 3, name: '八岐大蛇', title: '三阶灵兽·覆海魔蛟',
+      tags: ['poison', 'dark'],
+      archetype: 'serpent', primary: '#1e1b4b', secondary: '#84cc16', accent: '#a855f7', eyeColor: '#bef264',
+      horns: 'multi_heads', wings: 'none', tails: 3, tailStyle: 'serpent', aura: 'poison',
+      stats: { hp: 480, speed: 3.6, dmgMult: 1.7, armor: 12 },
+      skillName: '万蛇幽冥毒火', skillDesc: '多颗蛇首同时向四周喷吐幽冥骷髅毒火，落地形成剧毒瘴气池。'
+    },
+    {
+      id: 'bifang_bird', stage: 3, name: '火凤毕方', title: '三阶灵兽·怪火之兆',
+      tags: ['fire', 'wind'],
+      archetype: 'bird', primary: '#c2410c', secondary: '#fdba74', accent: '#fef08a', eyeColor: '#ffedd5',
+      horns: 'crest_fire', wings: 'feathered_large', tails: 2, tailStyle: 'ribbon_fire', aura: 'fire',
+      stats: { hp: 410, speed: 4.2, dmgMult: 1.75, armor: 6 },
+      skillName: '流火焚天羽', skillDesc: '振翅召唤流星火雨与烈焰龙卷，穿透敌群并引发连环烈焰爆炸。'
+    },
+    {
+      id: 'bingyi_deity', stage: 3, name: '冰夷河伯', title: '三阶灵兽·九河冰尊',
+      tags: ['ice', 'dark'],
+      archetype: 'deity', primary: '#0369a1', secondary: '#7dd3fc', accent: '#e0f2fe', eyeColor: '#ffffff',
+      horns: 'ice_crown', wings: 'ribbon', tails: 1, tailStyle: 'eel', aura: 'ice',
+      stats: { hp: 440, speed: 3.7, dmgMult: 1.68, armor: 10 },
+      skillName: '极寒玄冰风暴', skillDesc: '召唤围绕自身旋转扩大的六角暴风雪法阵，冻结并撕碎一切猎物。'
+    },
+    {
+      id: 'kuiniu_beast', stage: 3, name: '夔牛雷兽', title: '三阶灵兽·苍雷震世',
+      tags: ['thunder', 'rock'],
+      archetype: 'drake', primary: '#1e3a8a', secondary: '#93c5fd', accent: '#facc15', eyeColor: '#fef08a',
+      horns: 'bull_giant', wings: 'none', tails: 1, tailStyle: 'spiked_heavy', aura: 'thunder',
+      stats: { hp: 550, speed: 3.5, dmgMult: 1.7, armor: 18 },
+      skillName: '雷音震世吼', skillDesc: '独足踏地发出苍雷咆哮，引发全屏雷暴音浪环与落雷矩阵。'
+    },
+    {
+      id: 'xiangliu_hydra', stage: 3, name: '相柳毒神', title: '三阶灵兽·九首腐骨',
+      tags: ['poison', 'blood'],
+      archetype: 'serpent', primary: '#064e3b', secondary: '#34d399', accent: '#f43f5e', eyeColor: '#6ee7b7',
+      horns: 'multi_heads', wings: 'fin_wings', tails: 2, tailStyle: 'serpent', aura: 'poison',
+      stats: { hp: 490, speed: 3.6, dmgMult: 1.72, armor: 12 },
+      skillName: '化血腥风潮', skillDesc: '伸出多条剧毒深渊触须抽打全场，使大范围敌人持续融化爆裂。'
+    },
+    {
+      id: 'golden_hou', stage: 3, name: '金毛犼', title: '三阶灵兽·吞天伏龙',
+      tags: ['fire', 'rock'],
+      archetype: 'wolf', primary: '#b45309', secondary: '#fde047', accent: '#fb923c', eyeColor: '#fef9c3',
+      horns: 'lion_mane', wings: 'none', tails: 1, tailStyle: 'fluffy', aura: 'fire',
+      stats: { hp: 520, speed: 3.8, dmgMult: 1.72, armor: 16 },
+      skillName: '金焰焚仙圈', skillDesc: '张口吐出三道金色神火冲击环与陨石火雨，焚尽靠近的一切妖魔。'
+    },
+    {
+      id: 'ninetail_fox', stage: 3, name: '九尾天狐', title: '三阶灵兽·青丘帝姬',
+      tags: ['phantom', 'ice'],
+      archetype: 'wolf', primary: '#be185d', secondary: '#fbcfe8', accent: '#67e8f9', eyeColor: '#fdf2f8',
+      horns: 'fox_ears', wings: 'ribbon', tails: 9, tailStyle: 'fox', aura: 'phantom',
+      stats: { hp: 430, speed: 4.3, dmgMult: 1.75, armor: 8 },
+      skillName: '青丘摄魂妖火', skillDesc: '九尾齐摇唤出摄魂鬼火与双螺旋妖瞳神光，自动索敌引爆幻境。'
+    }
+  ],
+  stage4: [
+    {
+      id: 'kunpeng_myth', stage: 4, name: '北冥鲲鹏', title: '四阶神兽·吞天垂云',
+      tags: ['dark', 'wind'],
+      archetype: 'bird', primary: '#312e81', secondary: '#818cf8', accent: '#38bdf8', eyeColor: '#e0e7ff',
+      horns: 'crest_gold', wings: 'cosmic_wings', tails: 3, tailStyle: 'peacock', aura: 'chaos',
+      stats: { hp: 820, speed: 4.5, dmgMult: 2.3, armor: 18 },
+      skillName: '北冥归墟黑洞', skillDesc: '召唤吞噬万物的归墟黑洞与虚空触手，强力牵引全屏猎物并碾碎。'
+    },
+    {
+      id: 'yinglong_dragon', stage: 4, name: '太古应龙', title: '四阶神兽·翼龙天罚',
+      tags: ['thunder', 'fire'],
+      archetype: 'serpent', primary: '#b45309', secondary: '#fde047', accent: '#f97316', eyeColor: '#ffffff',
+      horns: 'antler_dragon', wings: 'feathered_large', tails: 1, tailStyle: 'dragon', aura: 'thunder',
+      stats: { hp: 880, speed: 4.3, dmgMult: 2.45, armor: 22 },
+      skillName: '天罚金焰陨星', skillDesc: '呼唤九天金焰雷陨石与分形神雷轰炸战场，造成毁灭性范围伤害。'
+    },
+    {
+      id: 'taotie_fiend', stage: 4, name: '饕餮魔神', title: '四阶神兽·吞天噬地',
+      tags: ['blood', 'dark'],
+      archetype: 'drake', primary: '#4c0519', secondary: '#f43f5e', accent: '#c084fc', eyeColor: '#fda4af',
+      horns: 'ram_giant', wings: 'bat_wings', tails: 1, tailStyle: 'spiked_heavy', aura: 'blood',
+      stats: { hp: 980, speed: 3.9, dmgMult: 2.35, armor: 26 },
+      skillName: '饕餮噬界漩涡', skillDesc: '张开深渊巨口与修罗巨爪吞噬生灵，每吞噬猎物永久提升体型与攻击！'
+    },
+    {
+      id: 'zhurong_fire', stage: 4, name: '祝融火神', title: '四阶神兽·南荒火祖',
+      tags: ['fire', 'thunder'],
+      archetype: 'deity', primary: '#9a3412', secondary: '#fb923c', accent: '#fef08a', eyeColor: '#fef9c3',
+      horns: 'fire_crown', wings: 'ribbon_fire', tails: 2, tailStyle: 'dragon', aura: 'fire',
+      stats: { hp: 850, speed: 4.1, dmgMult: 2.5, armor: 20 },
+      skillName: '南明离火神柱', skillDesc: '在敌群密集处降下连环大日陨星火雨，瞬间融化敌方护甲与血肉。'
+    },
+    {
+      id: 'gonggong_water', stage: 4, name: '共工水神', title: '四阶神兽·怒触不周',
+      tags: ['ice', 'poison'],
+      archetype: 'deity', primary: '#0c4a6e', secondary: '#38bdf8', accent: '#a3e635', eyeColor: '#bae6fd',
+      horns: 'antler_dragon', wings: 'fin_wings', tails: 1, tailStyle: 'serpent', aura: 'ice',
+      stats: { hp: 890, speed: 4.0, dmgMult: 2.35, armor: 22 },
+      skillName: '弱水三千怒潮', skillDesc: '掀起环绕全屏的玄冥寒冰剑阵与剧毒怒潮，冰封腐蚀沿途所有敌群。'
+    },
+    {
+      id: 'qilin_sage', stage: 4, name: '麒麟瑞兽', title: '四阶神兽·万兽尊王',
+      tags: ['rock', 'thunder'],
+      archetype: 'wolf', primary: '#ca8a04', secondary: '#fef08a', accent: '#34d399', eyeColor: '#ffffff',
+      horns: 'antler_dragon', wings: 'ribbon', tails: 1, tailStyle: 'fluffy', aura: 'thunder',
+      stats: { hp: 920, speed: 4.3, dmgMult: 2.35, armor: 28 },
+      skillName: '五方祥瑞雷罡', skillDesc: '踏出祥瑞八卦地裂大阵，同时降下密集九霄紫金天雷。'
+    },
+    {
+      id: 'baihu_slayer', stage: 4, name: '白虎杀神', title: '四阶神兽·庚金戮仙',
+      tags: ['blood', 'wind'],
+      archetype: 'wolf', primary: '#e2e8f0', secondary: '#f43f5e', accent: '#38bdf8', eyeColor: '#f43f5e',
+      horns: 'tiger_king', wings: 'feathered_large', tails: 1, tailStyle: 'whip', aura: 'blood',
+      stats: { hp: 840, speed: 4.7, dmgMult: 2.6, armor: 20 },
+      skillName: '庚金白虎诛仙斩', skillDesc: '挥出遮天蔽日的修罗血爪与飓风龙卷，撕裂全屏敌群。'
+    },
+    {
+      id: 'xuanwu_saint', stage: 4, name: '玄武圣兽', title: '四阶神兽·北极镇天',
+      tags: ['rock', 'ice'],
+      archetype: 'turtle', primary: '#0f172a', secondary: '#38bdf8', accent: '#a3e635', eyeColor: '#7dd3fc',
+      horns: 'snake_entwine', wings: 'none', tails: 1, tailStyle: 'serpent', aura: 'ice',
+      stats: { hp: 1150, speed: 3.6, dmgMult: 2.2, armor: 38 },
+      skillName: '玄冥镇岳冰山', skillDesc: '龟蛇合鸣唤出北极六角冰晶大阵与大地尖刺，镇压四方群魔。'
+    },
+    {
+      id: 'zhuque_phoenix', stage: 4, name: '朱雀神鸟', title: '四阶神兽·涅槃神凰',
+      tags: ['fire', 'phantom'],
+      archetype: 'bird', primary: '#be123c', secondary: '#fb923c', accent: '#fde047', eyeColor: '#fef08a',
+      horns: 'crest_fire', wings: 'cosmic_wings', tails: 5, tailStyle: 'peacock', aura: 'fire',
+      stats: { hp: 830, speed: 4.5, dmgMult: 2.5, armor: 18 },
+      skillName: '红莲涅槃神火', skillDesc: '展开遮天火翼降下红莲陨星雨与破灭神光，并具备涅槃自愈能力。'
+    }
+  ],
+  stage5: [
+    {
+      id: 'pangu_titan', stage: 5, name: '盘古真身', title: '五阶创世·开天辟地',
+      tags: ['rock', 'blood', 'thunder'],
+      archetype: 'deity', primary: '#b45309', secondary: '#fef08a', accent: '#f43f5e', eyeColor: '#ffffff',
+      horns: 'crown_god', wings: 'halo_rings', tails: 0, tailStyle: 'none', aura: 'god',
+      stats: { hp: 1800, speed: 4.5, dmgMult: 3.5, armor: 45 },
+      skillName: '开天辟地神斧', skillDesc: '挥动开天神斧劈出横贯全屏的黄金巨刃裂缝与九霄神雷秒杀群魔。'
+    },
+    {
+      id: 'zhulong_creator', stage: 5, name: '烛龙创世', title: '五阶创世·睁眼为昼',
+      tags: ['fire', 'ice', 'dark'],
+      archetype: 'serpent', primary: '#991b1b', secondary: '#fde047', accent: '#38bdf8', eyeColor: '#fef08a',
+      horns: 'crown_god', wings: 'cosmic_wings', tails: 1, tailStyle: 'dragon', aura: 'god',
+      stats: { hp: 1650, speed: 4.8, dmgMult: 3.6, armor: 35 },
+      skillName: '昼夜轮回吐息', skillDesc: '睁眼焚世大日陨星、闭眼永夜极寒冰阵，全屏交替降下昼夜创世神罚！'
+    },
+    {
+      id: 'chaos_fiend', stage: 5, name: '混沌魔神', title: '五阶创世·鸿蒙凶祖',
+      tags: ['dark', 'phantom', 'poison'],
+      archetype: 'deity', primary: '#3b0764', secondary: '#c084fc', accent: '#a3e635', eyeColor: '#f472b6',
+      horns: 'demon_curved', wings: 'six_wings', tails: 3, tailStyle: 'whip', aura: 'chaos',
+      stats: { hp: 1700, speed: 4.6, dmgMult: 3.55, armor: 38 },
+      skillName: '鸿蒙归墟灭世', skillDesc: '六翼齐振撕裂虚空，召唤归墟黑洞群、深渊巨触与破灭神光吞没万物。'
+    },
+    {
+      id: 'nuwa_saint', stage: 5, name: '女娲圣躯', title: '五阶创世·五彩补天',
+      tags: ['phantom', 'rock', 'wind'],
+      archetype: 'serpent', primary: '#047857', secondary: '#6ee7b7', accent: '#f472b6', eyeColor: '#fef08a',
+      horns: 'crown_god', wings: 'ribbon', tails: 1, tailStyle: 'serpent', aura: 'god',
+      stats: { hp: 1680, speed: 4.6, dmgMult: 3.4, armor: 40 },
+      skillName: '五彩神石补天阵', skillDesc: '召唤五色补天神石流星雨与飓风龙卷轰击全屏，并持续恢复气血。'
+    },
+    {
+      id: 'dijun_emperor', stage: 5, name: '帝俊天帝', title: '五阶创世·大日天庭',
+      tags: ['fire', 'thunder', 'wind'],
+      archetype: 'bird', primary: '#d97706', secondary: '#fef08a', accent: '#fb923c', eyeColor: '#ffffff',
+      horns: 'crown_god', wings: 'six_wings', tails: 5, tailStyle: 'peacock', aura: 'god',
+      stats: { hp: 1600, speed: 5.0, dmgMult: 3.7, armor: 32 },
+      skillName: '十日凌空焚世录', skillDesc: '召唤十日金乌陨星轰炸与分形天雷风暴，瞬间蒸发一切生灵。'
+    },
+    {
+      id: 'donghuang_taiyi', stage: 5, name: '东皇太一', title: '五阶创世·混沌钟主',
+      tags: ['thunder', 'dark', 'phantom'],
+      archetype: 'deity', primary: '#ca8a04', secondary: '#fef08a', accent: '#c084fc', eyeColor: '#fef08a',
+      horns: 'crown_god', wings: 'halo_rings', tails: 0, tailStyle: 'none', aura: 'god',
+      stats: { hp: 1750, speed: 4.6, dmgMult: 3.6, armor: 42 },
+      skillName: '东皇混沌钟声', skillDesc: '敲响混沌钟释放镇压诸天的金色八卦音波巨环与破灭激光束。'
+    },
+    {
+      id: 'zulong_ancestor', stage: 5, name: '祖龙真灵', title: '五阶创世·万龙之祖',
+      tags: ['thunder', 'ice', 'rock'],
+      archetype: 'serpent', primary: '#1d4ed8', secondary: '#93c5fd', accent: '#fde047', eyeColor: '#ffffff',
+      horns: 'antler_dragon', wings: 'cosmic_wings', tails: 1, tailStyle: 'dragon', aura: 'god',
+      stats: { hp: 1850, speed: 4.7, dmgMult: 3.55, armor: 44 },
+      skillName: '九龙朝圣灭世劫', skillDesc: '呼唤极寒冰剑风暴与九霄紫金雷劫，所过之处万物俱灭。'
+    },
+    {
+      id: 'yuanfeng_immortal', stage: 5, name: '元凤不死', title: '五阶创世·百禽之皇',
+      tags: ['fire', 'wind', 'phantom'],
+      archetype: 'bird', primary: '#e11d48', secondary: '#fda4af', accent: '#fde047', eyeColor: '#fef08a',
+      horns: 'crest_fire', wings: 'six_wings', tails: 7, tailStyle: 'peacock', aura: 'god',
+      stats: { hp: 1620, speed: 5.1, dmgMult: 3.65, armor: 34 },
+      skillName: '九天涅槃凰炎劫', skillDesc: '化作不死凰火陨星与飓风席卷天地，散发无尽追踪鬼火与重生圣焰。'
+    },
+    {
+      id: 'shiqilin_sovereign', stage: 5, name: '始麒麟皇', title: '五阶创世·大地皇者',
+      tags: ['rock', 'poison', 'blood'],
+      archetype: 'wolf', primary: '#78350f', secondary: '#fcd34d', accent: '#34d399', eyeColor: '#fef08a',
+      horns: 'antler_dragon', wings: 'halo_rings', tails: 3, tailStyle: 'fluffy', aura: 'god',
+      stats: { hp: 1950, speed: 4.5, dmgMult: 3.5, armor: 50 },
+      skillName: '洪荒大地崩灭印', skillDesc: '脚踏洪荒地脉引发全屏连环地裂岩刺、修罗血爪与万瘟毒界。'
+    }
+  ]
+};
+
+// ============================================================================
+// 3. 24种基因与器官定义（12主动攻击器官 + 12被动突变基因）与 12组联动超武
+// ============================================================================
+const ACTIVE_ORGANS = [
+  { id: 'claw',     name: '裂空利爪', tags: ['wind', 'blood'],   pairPassive: 'fang',     synergyName: '泣血修罗爪', synergyDesc: '凝聚半透明修罗恶魔巨爪撕裂半屏，打出三连腥红残影并汲取生命。', desc: '挥出三道立体月牙风刃爪痕撕裂前方敌群。', color: '#34d399' },
+  { id: 'venom',    name: '剧毒腺体', tags: ['poison'],          pairPassive: 'blood_s',  synergyName: '万瘟疫源界', synergyDesc: '展开覆盖全屏的八角瘟疫蛛网毒阵，沸腾毒泡使敌人连环毒爆。', desc: '抛射腐蚀毒液，在地面生成冒泡剧毒蛛网潭。', color: '#a3e635' },
+  { id: 'horn',     name: '雷霆角质', tags: ['thunder'],         pairPassive: 'nerve',    synergyName: '九霄神雷劫', synergyDesc: '引落密集紫金分形天雷矩阵，落点绽放八卦雷印并高速弹射。', desc: '召唤带有分叉电弧的落雷轰击周围高威胁目标。', color: '#facc15' },
+  { id: 'spikes',   name: '环绕骨刺', tags: ['rock', 'blood'],   pairPassive: 'carapace', synergyName: '修罗剑骨阵', synergyDesc: '化作双圈共10柄高速旋转的太古符文骨剑，拖曳华丽丝带刀光。', desc: '体外生成旋转符文骨刃护卫自身，带流光残影。', color: '#d6d3d1' },
+  { id: 'firesac',  name: '赤炎火囊', tags: ['fire'],            pairPassive: 'core',     synergyName: '大日金乌炎', synergyDesc: '召唤天罚金乌陨石雨从高空斜砸战场，炸开双层日冕火环与地裂。', desc: '召唤拖曳长尾焰的陨石火球砸向密集敌群。', color: '#fb923c' },
+  { id: 'frost_b',  name: '玄冰吐息', tags: ['ice'],             pairPassive: 'crystal',  synergyName: '绝对零度界', synergyDesc: '环绕齐射极寒冰魄神剑，命中后在地面绽放巨型六角雪花冰晶阵。', desc: '发射精细六棱寒冰利剑，穿透并冻结路径猎物。', color: '#38bdf8' },
+  { id: 'eye',      name: '重瞳妖目', tags: ['phantom', 'dark'], pairPassive: 'spirit',   synergyName: '破灭神光瞳', synergyDesc: '重瞳开合射出粗大白芯毁灭激光炮，伴随双螺旋能量流带横扫战场。', desc: '聚焦妖瞳发射带有螺旋光带的穿透高能激光束。', color: '#f472b6' },
+  { id: 'tentacle', name: '深渊触须', tags: ['dark', 'poison'],  pairPassive: 'stomach',  synergyName: '归墟黑洞触', synergyDesc: '撕裂虚空召唤归墟黑洞，伸出8条多关节扭动深渊巨触将猎物拖入绞杀。', desc: '从地面裂隙伸出扭动抽打的暗影触须鞭挞敌人。', color: '#c084fc' },
+  { id: 'wing_b',   name: '风刃翼膜', tags: ['wind'],            pairPassive: 'feather',  synergyName: '扶摇飓风眼', synergyDesc: '召唤多道游走全屏的螺旋龙卷飓风，持续卷入猎物并高速切割。', desc: '投射高速旋转的四叶弯刀风轮切割敌群。', color: '#2dd4bf' },
+  { id: 'tail_h',   name: '裂地尾锤', tags: ['rock', 'fire'],    pairPassive: 'muscle',   synergyName: '不周山崩击', synergyDesc: '巨尾轰击引发全屏放射状熔岩地裂纹，破土刺出数十根巨型岩石尖峰。', desc: '周期性甩尾重击地面，刺出环形岩石尖刺群。', color: '#fbbf24' },
+  { id: 'spore',    name: '噬魂孢子', tags: ['poison', 'phantom'],pairPassive:'miasma',   synergyName: '幽冥万魂幡', synergyDesc: '释放漫天狰狞骷髅鬼火弹，拖曳幽冥绸带尾迹自动索敌吞噬灵魂。', desc: '释放带流光尾迹的追踪噬魂鬼火弹。', color: '#84cc16' },
+  { id: 'sonic',    name: '血煞魔音', tags: ['blood', 'dark'],   pairPassive: 'heart',    synergyName: '天魔乱世曲', synergyDesc: '连续爆发三色八卦音律波纹巨环，震碎全屏敌人心脉并汲取气血。', desc: '发出高频律动声波震环，切割周围一圈敌人。', color: '#f43f5e' }
+];
+
+const PASSIVE_GENES = [
+  { id: 'fang',     name: '嗜血獠牙', tags: ['blood'],           desc: '攻击伤害+15%，并获得生命汲取。', color: '#f43f5e' },
+  { id: 'blood_s',  name: '腐蚀毒血', tags: ['poison'],          desc: '持续伤害与毒系范围+20%。', color: '#a3e635' },
+  { id: 'nerve',    name: '暴虐神经', tags: ['thunder', 'wind'], desc: '所有器官攻击冷却缩减+10%。', color: '#facc15' },
+  { id: 'carapace', name: '玄铁甲壳', tags: ['rock'],            desc: '护甲+5，气血上限+15%。', color: '#d6d3d1' },
+  { id: 'core',     name: '熔火核心', tags: ['fire'],            desc: '火系与爆炸范围+22%，伤害+12%。', color: '#fb923c' },
+  { id: 'crystal',  name: '极寒冰晶', tags: ['ice'],             desc: '冰冻减速效果增强，飞弹穿透+1。', color: '#38bdf8' },
+  { id: 'spirit',   name: '通灵妖魂', tags: ['phantom'],         desc: '暴击率+10%，射线与幻系伤害+18%。', color: '#f472b6' },
+  { id: 'stomach',  name: '引力胃袋', tags: ['dark'],            desc: '吞噬基因球引力范围+35%，经验获取+12%。', color: '#c084fc' },
+  { id: 'feather',  name: '疾风翎羽', tags: ['wind'],            desc: '移动速度+10%，飞行道具速度+20%。', color: '#34d399' },
+  { id: 'muscle',   name: '狂暴肌腱', tags: ['rock', 'blood'],   desc: '体型微幅成长，击退与近战范围+20%。', color: '#fbbf24' },
+  { id: 'miasma',   name: '幻梦毒瘴', tags: ['poison', 'phantom'],desc:'周围笼罩迷雾，降低靠近敌人的移速与攻击。', color: '#84cc16' },
+  { id: 'heart',    name: '魔神心脏', tags: ['blood', 'dark'],   desc: '每秒恢复气血+2.5，最大生命值+20%。', color: '#e11d48' }
+];
+
+function getOrganSvg(id, color) {
+  const icons = {
+    claw: `<path d="M4 20C8 14 14 8 21 4M8 22C12 16 16 11 22 8M2 16C6 11 11 6 17 3" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`,
+    venom: `<path d="M12 3C12 3 6 10 6 15C6 18.3 8.7 21 12 21C15.3 21 18 18.3 18 15C18 10 12 3 12 3Z" fill="${color}" fill-opacity="0.3" stroke="${color}" stroke-width="2"/><circle cx="10" cy="15" r="1.5" fill="#fff"/>`,
+    horn: `<path d="M13 2L4 14H12L11 22L20 10H12L13 2Z" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`,
+    spikes: `<circle cx="12" cy="12" r="5" stroke="${color}" stroke-width="2" fill="none"/><path d="M12 2V6M12 18V22M2 12H6M18 12H22M4.9 4.9L7.8 7.8M16.2 16.2L19.1 19.1M19.1 4.9L16.2 7.8M7.8 16.2L4.9 19.1" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`,
+    firesac: `<path d="M12 2C9 7 5 9 5 14C5 18 8 21 12 21C16 21 19 18 19 14C19 11 17 8 15 6C15 9 13 10 12 10C10 10 11 6 12 2Z" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="2"/>`,
+    frost_b: `<path d="M12 2V22M2 12H22M5 5L19 19M19 5L5 19" stroke="${color}" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="${color}"/>`,
+    eye: `<path d="M2 12C5 7 9 5 12 5C15 5 19 7 22 12C19 17 15 19 12 19C9 19 5 17 2 12Z" stroke="${color}" stroke-width="2" fill="none"/><circle cx="10" cy="12" r="2.5" fill="${color}"/><circle cx="14" cy="12" r="2.5" fill="#fff"/>`,
+    tentacle: `<path d="M6 21C6 15 10 14 10 9C10 5 14 3 17 5C19 7 16 11 14 13C12 15 15 19 18 21" stroke="${color}" stroke-width="2.5" stroke-linecap="round" fill="none"/>`,
+    wing_b: `<path d="M3 17C6 9 13 5 21 4C18 10 15 14 9 16C13 17 16 17 19 16" stroke="${color}" stroke-width="2.2" fill="${color}" fill-opacity="0.25" stroke-linecap="round"/>`,
+    tail_h: `<path d="M4 18C8 18 10 14 13 10" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/><polygon points="13,5 20,7 18,14 11,12" fill="${color}" fill-opacity="0.4" stroke="${color}" stroke-width="2"/>`,
+    spore: `<circle cx="8" cy="9" r="3" fill="${color}" fill-opacity="0.4" stroke="${color}" stroke-width="1.8"/><circle cx="16" cy="8" r="2.5" fill="${color}"/><circle cx="13" cy="16" r="3.5" fill="${color}" fill-opacity="0.4" stroke="${color}" stroke-width="1.8"/>`,
+    sonic: `<path d="M8 9C10 11 10 13 8 15M12 6C16 10 16 14 12 18M16 3C22 9 22 15 16 21" stroke="${color}" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="5" cy="12" r="2" fill="${color}"/>`
+  };
+  const fallback = `<polygon points="12,3 20,8 20,16 12,21 4,16 4,8" fill="${color}" fill-opacity="0.3" stroke="${color}" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="#fff"/>`;
+  return `<svg viewBox="0 0 24 24" class="w-full h-full">${icons[id] || fallback}</svg>`;
+}
+
+// ============================================================================
+// 4. 山海异兽骨骼与程序化精细绘制引擎（零 shadowBlur 硬件加速版）
+// ============================================================================
+function drawMythicalBeast(ctx, form, x, y, radius, angle, walkPhase, hurtFlash = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  drawBeastAura(ctx, form, radius, walkPhase);
+  ctx.rotate(angle);
+
+  const breathe = 1 + Math.sin(walkPhase * 2) * 0.045;
+  const sway = Math.sin(walkPhase * 3) * 0.06;
+  ctx.scale(breathe, 1 / breathe);
+  ctx.rotate(sway);
+
+  drawBeastTails(ctx, form, radius, walkPhase);
+
+  if (form.wings && form.wings !== 'none') {
+    drawBeastWings(ctx, form, radius, walkPhase);
+  }
+
+  switch (form.archetype) {
+    case 'spider':  drawSpiderBody(ctx, form, radius, walkPhase); break;
+    case 'serpent': drawSerpentBody(ctx, form, radius, walkPhase); break;
+    case 'bird':    drawBirdBody(ctx, form, radius, walkPhase); break;
+    case 'turtle':  drawTurtleBody(ctx, form, radius, walkPhase); break;
+    case 'deity':   drawDeityBody(ctx, form, radius, walkPhase); break;
+    case 'drake':   drawDrakeBody(ctx, form, radius, walkPhase); break;
+    default:        drawQuadrupedBody(ctx, form, radius, walkPhase); break;
+  }
+
+  drawBeastHead(ctx, form, radius, walkPhase);
+
+  if (hurtFlash > 0) {
+    ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.7, hurtFlash * 2)})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 1.05, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawBeastAura(ctx, form, r, phase) {
+  ctx.save();
+  const stage = form.stage || 1;
+  ctx.rotate(phase * 0.4);
+
+  const grad = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * (1.35 + stage * 0.12));
+  grad.addColorStop(0, form.secondary + '44');
+  grad.addColorStop(0.6, form.primary + '22');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * (1.35 + stage * 0.12), 0, Math.PI * 2);
+  ctx.fill();
+
+  if (stage >= 3) {
+    ctx.strokeStyle = form.secondary + '66';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.25, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const points = stage >= 5 ? 8 : 6;
+    ctx.beginPath();
+    for (let i = 0; i < points; i++) {
+      const a = (i * Math.PI * 2) / points;
+      const x1 = Math.cos(a) * r * 1.25;
+      const y1 = Math.sin(a) * r * 1.25;
+      const a2 = ((i + 2) * Math.PI * 2) / points;
+      const x2 = Math.cos(a2) * r * 1.25;
+      const y2 = Math.sin(a2) * r * 1.25;
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    }
+    ctx.strokeStyle = form.accent + '44';
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBeastTails(ctx, form, r, phase) {
+  const count = form.tails || 0;
+  if (count <= 0) return;
+
+  for (let i = 0; i < count; i++) {
+    const spread = count === 1 ? 0 : ((i / (count - 1)) - 0.5) * 1.15;
+    const wave = Math.sin(phase * 3.5 + i * 0.9) * 0.35;
+    ctx.save();
+    ctx.translate(-r * 0.55, 0);
+    ctx.rotate(spread + wave);
+
+    ctx.fillStyle = form.secondary;
+    ctx.strokeStyle = form.accent;
+    ctx.lineWidth = 1.2;
+
+    if (form.tailStyle === 'fox' || form.tailStyle === 'fluffy') {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(-r * 0.5, -r * 0.38, -r * 1.1, -r * 0.25, -r * 1.45, Math.sin(phase * 4 + i) * r * 0.15);
+      ctx.bezierCurveTo(-r * 1.1, r * 0.25, -r * 0.5, r * 0.38, 0, 0);
+      ctx.fill();
+      ctx.stroke();
+    } else if (form.tailStyle === 'peacock' || form.tailStyle === 'ribbon_fire') {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-r * 0.8, -r * 0.15, -r * 1.6, 0);
+      ctx.quadraticCurveTo(-r * 0.8, r * 0.15, 0, 0);
+      ctx.fill();
+      ctx.fillStyle = form.accent;
+      ctx.beginPath();
+      ctx.arc(-r * 1.35, 0, r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.18);
+      ctx.quadraticCurveTo(-r * 0.7, -r * 0.12, -r * 1.35, 0);
+      ctx.quadraticCurveTo(-r * 0.7, r * 0.12, 0, r * 0.18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawBeastWings(ctx, form, r, phase) {
+  const flap = Math.sin(phase * 4.2) * 0.28;
+
+  if (form.wings === 'halo_rings') {
+    ctx.save();
+    ctx.strokeStyle = form.accent;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(-r * 0.2, 0, r * 1.25, -Math.PI * 0.75, Math.PI * 0.75);
+    ctx.stroke();
+    for (let i = -3; i <= 3; i++) {
+      const a = i * 0.38 + Math.sin(phase * 2) * 0.1;
+      const wx = Math.cos(a + Math.PI) * r * 1.35;
+      const wy = Math.sin(a + Math.PI) * r * 1.35;
+      ctx.fillStyle = form.secondary;
+      ctx.beginPath();
+      ctx.arc(wx, wy, r * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
+
+  const wingPairs = form.wings === 'six_wings' ? 3 : 1;
+  for (let p = 0; p < wingPairs; p++) {
+    const scaleP = 1 - p * 0.2;
+    const offsetAngle = p * 0.32;
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(-r * 0.05, side * r * 0.25);
+      ctx.scale(scaleP, side * scaleP);
+      ctx.rotate(flap + offsetAngle);
+
+      ctx.fillStyle = form.secondary;
+      ctx.strokeStyle = form.accent;
+      ctx.lineWidth = 1.5;
+
+      if (form.wings === 'bat_wings') {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(r * 0.25, r * 1.35);
+        ctx.quadraticCurveTo(-r * 0.1, r * 1.05, -r * 0.35, r * 1.45);
+        ctx.quadraticCurveTo(-r * 0.5, r * 0.9, -r * 0.85, r * 1.15);
+        ctx.quadraticCurveTo(-r * 0.6, r * 0.45, -r * 0.4, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (form.wings === 'ribbon' || form.wings === 'ribbon_fire') {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.bezierCurveTo(r * 0.5, r * 0.9, -r * 0.8, r * 1.2, -r * 1.2, r * 1.7);
+        ctx.bezierCurveTo(-r * 0.5, r * 1.3, r * 0.2, r * 0.8, -r * 0.2, 0);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(r * 0.15, 0);
+        ctx.quadraticCurveTo(r * 0.45, r * 0.9, -r * 0.15, r * 1.65);
+        ctx.lineTo(-r * 0.45, r * 1.4);
+        ctx.lineTo(-r * 0.35, r * 1.15);
+        ctx.lineTo(-r * 0.7, r * 1.1);
+        ctx.lineTo(-r * 0.55, r * 0.8);
+        ctx.lineTo(-r * 0.85, r * 0.65);
+        ctx.quadraticCurveTo(-r * 0.45, r * 0.2, -r * 0.3, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+}
+
+function drawQuadrupedBody(ctx, form, r, phase) {
+  const legPositions = [
+    { x: r * 0.35, y: -r * 0.52, p: 0 },
+    { x: r * 0.35, y: r * 0.52,  p: Math.PI },
+    { x: -r * 0.4, y: -r * 0.48, p: Math.PI },
+    { x: -r * 0.4, y: r * 0.48,  p: 0 }
+  ];
+  for (const leg of legPositions) {
+    const stride = Math.sin(phase * 5 + leg.p) * r * 0.22;
+    ctx.save();
+    ctx.translate(leg.x + stride, leg.y);
+    ctx.fillStyle = form.primary;
+    ctx.strokeStyle = form.accent;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.24, r * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.secondary;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.65, 0);
+  ctx.bezierCurveTo(r * 0.55, -r * 0.65, -r * 0.55, -r * 0.55, -r * 0.72, 0);
+  ctx.bezierCurveTo(-r * 0.55, r * 0.55, r * 0.55, r * 0.65, r * 0.65, 0);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.3, 0);
+  ctx.lineTo(-r * 0.5, 0);
+  ctx.stroke();
+}
+
+function drawDrakeBody(ctx, form, r, phase) {
+  for (const side of [-1, 1]) {
+    for (const front of [-1, 1]) {
+      const stride = Math.sin(phase * 4 + side * front) * r * 0.18;
+      ctx.fillStyle = form.primary;
+      ctx.strokeStyle = form.accent;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(front * r * 0.35 + stride, side * r * 0.62, r * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 0.78, r * 0.66, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  if (form.id === 'taotie_fiend') {
+    ctx.fillStyle = '#090206';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.42, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    for (let i = -2; i <= 2; i++) {
+      ctx.fillStyle = form.accent;
+      ctx.beginPath();
+      ctx.moveTo(i * r * 0.22 + r * 0.12, 0);
+      ctx.lineTo(i * r * 0.22 - r * 0.08, -r * 0.16);
+      ctx.lineTo(i * r * 0.22 - r * 0.08, r * 0.16);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+function drawSpiderBody(ctx, form, r, phase) {
+  ctx.strokeStyle = form.secondary;
+  ctx.lineWidth = 2.6;
+  ctx.lineCap = 'round';
+  for (let side of [-1, 1]) {
+    for (let i = 0; i < 4; i++) {
+      const baseAngle = side * (0.45 + i * 0.38);
+      const lift = Math.sin(phase * 6 + i * 1.4 + (side > 0 ? 0 : Math.PI)) * 0.2;
+      const a = baseAngle + lift;
+      const kx = Math.cos(a) * r * 0.75;
+      const ky = Math.sin(a) * r * 0.75;
+      const tx = Math.cos(a - side * 0.25) * r * 1.28;
+      const ty = Math.sin(a - side * 0.25) * r * 1.28;
+      ctx.beginPath();
+      ctx.moveTo(0, side * r * 0.2);
+      ctx.lineTo(kx, ky);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+    }
+  }
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.secondary;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.38, 0, r * 0.58, r * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawSerpentBody(ctx, form, r, phase) {
+  const segments = 8;
+  for (let i = segments; i >= 1; i--) {
+    const t = i / segments;
+    const sx = (0.35 - t * 1.45) * r;
+    const sy = Math.sin(phase * 4.5 - i * 0.65) * r * (0.12 + t * 0.28);
+    const sr = r * (0.48 - t * 0.28);
+
+    ctx.fillStyle = i % 2 === 0 ? form.primary : form.secondary;
+    ctx.strokeStyle = form.accent;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+function drawBirdBody(ctx, form, r) {
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.7, 0);
+  ctx.quadraticCurveTo(0, -r * 0.52, -r * 0.68, -r * 0.2);
+  ctx.lineTo(-r * 0.85, 0);
+  ctx.lineTo(-r * 0.68, r * 0.2);
+  ctx.quadraticCurveTo(0, r * 0.52, r * 0.7, 0);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawTurtleBody(ctx, form, r) {
+  for (const side of [-1, 1]) {
+    for (const front of [-1, 1]) {
+      ctx.fillStyle = form.primary;
+      ctx.beginPath();
+      ctx.arc(front * r * 0.45, side * r * 0.68, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.76, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    const px = Math.cos(a) * r * 0.45;
+    const py = Math.sin(a) * r * 0.45;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawDeityBody(ctx, form, r, phase) {
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.45, -r * 0.78);
+  ctx.quadraticCurveTo(r * 0.7, 0, r * 0.45, r * 0.78);
+  ctx.lineTo(-r * 0.45, r * 0.48);
+  ctx.quadraticCurveTo(-r * 0.7, 0, -r * 0.45, -r * 0.48);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  for (const side of [-1, 1]) {
+    const fx = r * 0.55 + Math.sin(phase * 4 + side) * r * 0.15;
+    const fy = side * r * 0.92;
+    ctx.fillStyle = form.accent;
+    ctx.beginPath();
+    ctx.arc(fx, fy, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawBeastHead(ctx, form, r, phase) {
+  ctx.save();
+  ctx.translate(r * 0.52, 0);
+
+  if (form.horns === 'multi_heads') {
+    for (let h = -1; h <= 1; h++) {
+      ctx.save();
+      ctx.rotate(h * 0.45 + Math.sin(phase * 3 + h) * 0.1);
+      ctx.translate(r * 0.25, 0);
+      ctx.fillStyle = form.primary;
+      ctx.strokeStyle = form.accent;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.32, r * 0.22, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = form.eyeColor;
+      ctx.beginPath();
+      ctx.arc(r * 0.1, -r * 0.1, r * 0.06, 0, Math.PI * 2);
+      ctx.arc(r * 0.1, r * 0.1, r * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
+
+  ctx.fillStyle = form.primary;
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.45, 0);
+  ctx.quadraticCurveTo(r * 0.15, -r * 0.42, -r * 0.3, -r * 0.32);
+  ctx.quadraticCurveTo(-r * 0.45, 0, -r * 0.3, r * 0.32);
+  ctx.quadraticCurveTo(r * 0.15, r * 0.42, r * 0.45, 0);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = form.accent;
+  ctx.strokeStyle = form.accent;
+  ctx.lineWidth = 2.2;
+  if (form.horns === 'antler_dragon' || form.horns === 'crown_god') {
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.05, side * r * 0.22);
+      ctx.quadraticCurveTo(-r * 0.35, side * r * 0.65, -r * 0.75, side * r * 0.52);
+      ctx.moveTo(-r * 0.35, side * r * 0.45);
+      ctx.lineTo(-r * 0.55, side * r * 0.78);
+      ctx.stroke();
+    }
+  } else if (form.horns === 'bull_giant' || form.horns === 'demon_curved' || form.horns === 'ram_giant') {
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(0, side * r * 0.25);
+      ctx.quadraticCurveTo(r * 0.35, side * r * 0.85, -r * 0.3, side * r * 0.75);
+      ctx.quadraticCurveTo(r * 0.05, side * r * 0.55, -r * 0.15, side * r * 0.22);
+      ctx.fill();
+    }
+  } else {
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.05, side * r * 0.2);
+      ctx.lineTo(-r * 0.48, side * r * 0.55);
+      ctx.lineTo(-r * 0.28, side * r * 0.1);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  ctx.fillStyle = form.eyeColor || '#fef08a';
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(r * 0.08, side * r * 0.16, r * 0.1, r * 0.055, side * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// 零 shadowBlur 高速小怪绘制
+function drawWildMonster(ctx, e) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.rotate(e.angle);
+
+  const r = e.radius;
+  const p = e.walkPhase;
+
+  if (e.isBoss) {
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.25, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = e.accent;
+  ctx.lineWidth = e.isBoss ? 2.5 : 1.5;
+  for (const side of [-1, 1]) {
+    const legSwing = Math.sin(p * 4 + side) * r * 0.22;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.2, side * r * 0.4);
+    ctx.lineTo(r * 0.35 + legSwing, side * r * 0.92);
+    ctx.moveTo(-r * 0.25, side * r * 0.4);
+    ctx.lineTo(-r * 0.35 - legSwing, side * r * 0.92);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = e.hurtTimer > 0 ? '#ffffff' : e.primary;
+  ctx.strokeStyle = e.secondary;
+  ctx.lineWidth = e.isBoss ? 2.5 : 1.4;
+
+  ctx.beginPath();
+  ctx.moveTo(r * 0.95, 0);
+  ctx.quadraticCurveTo(r * 0.2, -r * 0.82, -r * 0.82, -r * 0.52);
+  ctx.lineTo(-r * 0.58, 0);
+  ctx.lineTo(-r * 0.82, r * 0.52);
+  ctx.quadraticCurveTo(r * 0.2, r * 0.82, r * 0.95, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath();
+  ctx.arc(r * 0.35, -r * 0.22, r * 0.11, 0, Math.PI * 2);
+  ctx.arc(r * 0.35, r * 0.22, r * 0.11, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  if (e.isBoss || e.hp < e.maxHp) {
+    const bw = e.isBoss ? r * 2.2 : r * 1.5;
+    const bh = e.isBoss ? 6 : 3.5;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(e.x - bw / 2, e.y - r - 12, bw, bh);
+    ctx.fillStyle = e.isBoss ? '#f43f5e' : '#fb923c';
+    ctx.fillRect(e.x - bw / 2, e.y - r - 12, bw * Math.max(0, e.hp / e.maxHp), bh);
+  }
+}
+
+// ============================================================================
+// 5. Web Audio 合成音效系统（带节流阀防止AOE卡顿）
+// ============================================================================
+class SoundSystem {
+  constructor() {
+    this.ctx = null;
+    this.lastHitTime = 0;
+    this.lastDevourTime = 0;
+  }
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  playDevour() {
+    if (!this.ctx) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastDevourTime < 55) return; // 节流保护
+    this.lastDevourTime = nowMs;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(340 + Math.random() * 140, now);
+    osc.frequency.exponentialRampToValueAtTime(760, now + 0.08);
+    gain.gain.setValueAtTime(0.06, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.start(now); osc.stop(now + 0.08);
+  }
+  playHit() {
+    if (!this.ctx) return;
+    const nowMs = performance.now();
+    if (nowMs - this.lastHitTime < 75) return; // 关键修复：75ms内最多触发1次受击音效，彻底杜绝AOE命中时创建几十个音频节点导致卡死
+    this.lastHitTime = nowMs;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(50, now + 0.05);
+    gain.gain.setValueAtTime(0.05, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.start(now); osc.stop(now + 0.05);
+  }
+  playEvolution() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    [261.6, 329.6, 392.0, 523.2, 659.2].forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+      gain.gain.setValueAtTime(0.1, now + idx * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.4);
+      osc.connect(gain); gain.connect(this.ctx.destination);
+      osc.start(now + idx * 0.07); osc.stop(now + idx * 0.07 + 0.4);
+    });
+  }
+}
+const sfx = new SoundSystem();
+
+// ============================================================================
+// 6. 游戏核心状态与华丽特效容器
+// ============================================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameState = 'START';
+let gameTime = 0;
+let killCount = 0;
+let screenShake = 0;
+
+const MAP_FEATURES = [];
+for (let i = 0; i < 80; i++) {
+  MAP_FEATURES.push({
+    x: (Math.random() - 0.5) * 4000,
+    y: (Math.random() - 0.5) * 4000,
+    r: 25 + Math.random() * 60,
+    rot: Math.random() * Math.PI * 2,
+    color: ['#38bdf8', '#a855f7', '#f59e0b'][i % 3]
+  });
+}
+
+const player = {
+  x: 0, y: 0, vx: 0, vy: 0, angle: 0, walkPhase: 0,
+  radius: 24, form: ALL_FORMS.stage1[0],
+  stage: 1, level: 1, exp: 0, expNext: 18,
+  hp: 130, maxHp: 130, speed: 3.4, dmgMult: 1.0, armor: 0,
+  hurtTimer: 0, formSkillTimer: 0, taotieStacks: 0,
+  organs: [], passives: [],
+  geneCounts: { wind:0, fire:0, thunder:0, poison:0, blood:1, ice:0, rock:0, dark:1, phantom:0 }
+};
+
+let enemies = [];
+let projectiles = [];     // 冰晶飞剑、四叶风轮、幽冥骷髅鬼火弹
+let meteors = [];         // 斜降天火流星
+let slashEffects = [];    // 三连月牙爪痕与修罗巨爪
+let lightningBolts = [];  // 分形天雷与落雷八卦阵
+let laserBeams = [];      // 双螺旋高能妖瞳激光炮
+let abyssTentacles = [];  // 多关节IK扭动深渊触须
+let groundZones = [];     // 剧毒蛛网阵、归墟黑洞、六角冰晶雪花阵、岩石尖峰阵、八卦音浪环
+let tornadoes = [];       // 游走全屏的螺旋飓风龙卷
+let orbitingSpikes = [];  // 带丝带刀光残影的太古符文骨剑
+let particles = [];
+let floatingTexts = [];
+let expGems = [];
+
+const keys = {};
+const pointer = { active: false, startX: 0, startY: 0, currX: 0, currY: 0 };
+
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+canvas.addEventListener('pointerdown', e => {
+  if (gameState !== 'PLAYING') return;
+  pointer.active = true;
+  pointer.startX = e.clientX; pointer.startY = e.clientY;
+  pointer.currX = e.clientX; pointer.currY = e.clientY;
+});
+window.addEventListener('pointermove', e => {
+  if (!pointer.active) return;
+  pointer.currX = e.clientX; pointer.currY = e.clientY;
+});
+window.addEventListener('pointerup', () => { pointer.active = false; });
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ============================================================================
+// 7. 基因亲和度与 9选3 形态匹配
+// ============================================================================
+function recalculateStatsAndGenes() {
+  const counts = { wind:0, fire:0, thunder:0, poison:0, blood:0, ice:0, rock:0, dark:0, phantom:0 };
+  player.form.tags.forEach(t => { if (counts[t] !== undefined) counts[t] += 2; });
+  player.organs.forEach(o => {
+    const def = ACTIVE_ORGANS.find(a => a.id === o.id);
+    if (def) def.tags.forEach(t => { counts[t] += o.level + (o.evolved ? 3 : 0); });
+  });
+  player.passives.forEach(p => {
+    const def = PASSIVE_GENES.find(g => g.id === p.id);
+    if (def) def.tags.forEach(t => { counts[t] += p.level * 2; });
+  });
+  player.geneCounts = counts;
+
+  const base = player.form.stats;
+  const carapaceLv = getPassiveLevel('carapace');
+  const heartLv = getPassiveLevel('heart');
+  const fangLv = getPassiveLevel('fang');
+  const featherLv = getPassiveLevel('feather');
+  const muscleLv = getPassiveLevel('muscle');
+
+  const hpMult = 1 + carapaceLv * 0.15 + heartLv * 0.2 + (player.taotieStacks * 0.005);
+  const oldMax = player.maxHp;
+  player.maxHp = Math.round(base.hp * hpMult);
+  if (player.maxHp > oldMax) player.hp += (player.maxHp - oldMax);
+
+  player.speed = base.speed * (1 + featherLv * 0.1);
+  player.dmgMult = base.dmgMult * (1 + fangLv * 0.15 + (player.taotieStacks * 0.004));
+  player.armor = base.armor + carapaceLv * 5;
+  player.radius = (22 + player.stage * 4) * (1 + muscleLv * 0.06);
+
+  updateHudUI();
+}
+
+function getPassiveLevel(id) {
+  const found = player.passives.find(p => p.id === id);
+  return found ? found.level : 0;
+}
+
+function matchTop3FormsForStage(stageNum) {
+  const pool = ALL_FORMS['stage' + stageNum] || [];
+  const totalGenes = Object.values(player.geneCounts).reduce((a, b) => a + b, 1);
+
+  const scored = pool.map(form => {
+    let rawScore = 0;
+    form.tags.forEach(tag => {
+      rawScore += (player.geneCounts[tag] || 0) * 18;
+    });
+    const matchPct = Math.min(99, Math.max(45, Math.round(52 + (rawScore / Math.max(8, totalGenes * 10)) * 45 + Math.random() * 6)));
+    return { form, score: rawScore + Math.random() * 2, matchPct };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, 3);
+}
+
+// ============================================================================
+// 8. 升级选项与 12组双器官超武联动
+// ============================================================================
+function generateUpgradeChoices() {
+  const choices = [];
+  player.organs.forEach(org => {
+    if (org.level >= 5 && !org.evolved) {
+      const def = ACTIVE_ORGANS.find(a => a.id === org.id);
+      if (def && getPassiveLevel(def.pairPassive) >= 1) {
+        choices.push({ type: 'synergy', organId: org.id, def: def });
+      }
+    }
+  });
+
+  const normalPool = [];
+  ACTIVE_ORGANS.forEach(def => {
+    const owned = player.organs.find(o => o.id === def.id);
+    if (owned) {
+      if (owned.level < 5) normalPool.push({ type: 'active', def, nextLv: owned.level + 1 });
+    } else if (player.organs.length < 6) {
+      normalPool.push({ type: 'active', def, nextLv: 1 });
+    }
+  });
+
+  PASSIVE_GENES.forEach(def => {
+    const owned = player.passives.find(p => p.id === def.id);
+    if (owned) {
+      if (owned.level < 5) normalPool.push({ type: 'passive', def, nextLv: owned.level + 1 });
+    } else if (player.passives.length < 6) {
+      normalPool.push({ type: 'passive', def, nextLv: 1 });
+    }
+  });
+
+  normalPool.sort(() => Math.random() - 0.5);
+  for (const item of normalPool) {
+    if (choices.length >= 3) break;
+    choices.push(item);
+  }
+
+  while (choices.length < 3) {
+    choices.push({
+      type: 'heal',
+      def: { id: 'blood', name: '太古祖血精华', tags: ['blood'], desc: '立即恢复 60% 气血，且永久提升 12% 攻击伤害。', color: '#f43f5e' }
+    });
+  }
+  return choices.slice(0, 3);
+}
+
+// ============================================================================
+// 9. 次世代华丽战斗特效生成器（零卡顿高性能实现）
+// ============================================================================
+function findNearestEnemy(x, y, maxDist = 900) {
+  let best = null, minDistSq = maxDist * maxDist;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    const dx = e.x - x, dy = e.y - y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq < minDistSq) { minDistSq = dSq; best = e; }
+  }
+  return best;
+}
+
+function dealDamage(enemy, amount, color = '#fef08a', knockback = 3) {
+  const spiritLv = getPassiveLevel('spirit');
+  const isCrit = Math.random() < (0.08 + spiritLv * 0.08);
+  const finalDmg = Math.round(amount * player.dmgMult * (isCrit ? 1.85 : 1));
+  enemy.hp -= finalDmg;
+  enemy.hurtTimer = 0.12;
+
+  const fangLv = getPassiveLevel('fang');
+  if (fangLv > 0 && Math.random() < 0.2) {
+    player.hp = Math.min(player.maxHp, player.hp + fangLv * 0.7);
+  }
+
+  if (knockback !== 0) {
+    const dx = enemy.x - player.x, dy = enemy.y - player.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const kb = knockback * (enemy.isBoss ? 0.15 : 1);
+    enemy.x += (dx / len) * kb;
+    enemy.y += (dy / len) * kb;
+  }
+
+  sfx.playHit();
+
+  // 严格限制同屏飘字数量，防止DOM/Canvas文本重绘卡顿
+  if (floatingTexts.length < 28 && (isCrit || Math.random() < 0.45)) {
+    floatingTexts.push({
+      x: enemy.x + (Math.random() - 0.5) * 14,
+      y: enemy.y - enemy.radius,
+      text: isCrit ? `💥${finalDmg}` : `${finalDmg}`,
+      color: isCrit ? '#fde047' : color,
+      size: isCrit ? 16 : 12,
+      life: 0.45
+    });
+  }
+
+  // 轻量受击火花粒子
+  if (particles.length < 140) {
+    for (let i = 0; i < 2; i++) {
+      const pa = Math.random() * Math.PI * 2;
+      const spd = 2 + Math.random() * 3.5;
+      particles.push({
+        x: enemy.x, y: enemy.y,
+        vx: Math.cos(pa) * spd, vy: Math.sin(pa) * spd,
+        r: 2 + Math.random() * 2.5, color: color,
+        life: 0.28, maxLife: 0.28
+      });
+    }
+  }
+}
+
+// 1. 三连立体月牙爪痕 & 泣血修罗巨爪
+function spawnClawSlash(x, y, angle, radius, color, dmg, isGiant = false) {
+  slashEffects.push({
+    x, y, angle, radius, color,
+    life: 0.26, maxLife: 0.26, isGiant
+  });
+  const rSq = (radius + 25) * (radius + 25);
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    const dx = e.x - x, dy = e.y - y;
+    if (dx * dx + dy * dy <= rSq) {
+      const diff = Math.atan2(Math.sin(Math.atan2(dy, dx) - angle), Math.cos(Math.atan2(dy, dx) - angle));
+      if (Math.abs(diff) < 1.35 || isGiant) {
+        dealDamage(e, dmg, color, isGiant ? 10 : 5);
+      }
+    }
+  }
+}
+
+// 2. 分形分支天雷与落雷八卦阵
+function createFractalBoltSegments(x1, y1, x2, y2, displace) {
+  const pts = [{ x: x1, y: y1 }];
+  const steps = 6;
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    pts.push({
+      x: x1 + (x2 - x1) * t + (Math.random() - 0.5) * displace,
+      y: y1 + (y2 - y1) * t + (Math.random() - 0.5) * displace
+    });
+  }
+  pts.push({ x: x2, y: y2 });
+  return pts;
+}
+
+function spawnLightningChain(startX, startY, jumps, dmg, color = '#facc15', isEvolved = false) {
+  let currX = startX, currY = startY;
+  const hitSet = new Set();
+  for (let i = 0; i < jumps; i++) {
+    let best = null, minDistSq = 360 * 360;
+    for (let j = 0; j < enemies.length; j++) {
+      const e = enemies[j];
+      if (hitSet.has(e)) continue;
+      const dx = e.x - currX, dy = e.y - currY;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < minDistSq) { minDistSq = dSq; best = e; }
+    }
+    if (!best) break;
+    hitSet.add(best);
+    dealDamage(best, dmg, color, 2);
+
+    const mainPts = createFractalBoltSegments(currX, currY, best.x, best.y, 34);
+    // 生成分叉细电弧
+    const mid = mainPts[Math.floor(mainPts.length / 2)];
+    const branchPts = createFractalBoltSegments(
+      mid.x, mid.y,
+      mid.x + (Math.random() - 0.5) * 90,
+      mid.y + (Math.random() - 0.5) * 90,
+      16
+    );
+
+    lightningBolts.push({
+      pts: mainPts, branchPts,
+      targetX: best.x, targetY: best.y,
+      color, isEvolved,
+      life: 0.25, maxLife: 0.25
+    });
+
+    currX = best.x; currY = best.y;
+  }
+}
+
+// 3. 双螺旋高能妖瞳激光炮
+function spawnLaserBeam(x, y, angle, length, width, color, dmg, isEvolved = false) {
+  const endX = x + Math.cos(angle) * length;
+  const endY = y + Math.sin(angle) * length;
+  laserBeams.push({
+    x1: x, y1: y, x2: endX, y2: endY,
+    angle, length, width, color, isEvolved,
+    life: 0.32, maxLife: 0.32
+  });
+
+  const l2 = length * length;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    let t = ((e.x - x) * (endX - x) + (e.y - y) * (endY - y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const projX = x + t * (endX - x);
+    const projY = y + t * (endY - y);
+    const dx = e.x - projX, dy = e.y - projY;
+    const hitR = e.radius + width * 1.4;
+    if (dx * dx + dy * dy <= hitR * hitR) {
+      dealDamage(e, dmg, color, 3);
+    }
+  }
+}
+
+// 4. 多关节扭动深渊触须群
+function spawnAbyssTentacles(x, y, count, maxLen, color, dmg, pullIn = false) {
+  for (let i = 0; i < count; i++) {
+    const baseAngle = (i * Math.PI * 2) / count + (Math.random() - 0.5) * 0.3;
+    abyssTentacles.push({
+      x, y, baseAngle, len: maxLen, color,
+      phase: Math.random() * 10,
+      life: 0.55, maxLife: 0.55
+    });
+  }
+  const rSq = (maxLen + 25) * (maxLen + 25);
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    const dx = e.x - x, dy = e.y - y;
+    if (dx * dx + dy * dy <= rSq) {
+      dealDamage(e, dmg, color, pullIn ? -16 : 8);
+    }
+  }
+}
+
+// 5. 斜降天火流星
+function spawnMeteorStrike(targetX, targetY, radius, color, dmg, isEvolved = false) {
+  meteors.push({
+    startX: targetX - 180,
+    startY: targetY - 320,
+    targetX, targetY,
+    radius, color, dmg, isEvolved,
+    progress: 0, speed: 3.4
+  });
+}
+
+// 更新所有武器与本命神通
+function updateWeaponsAndSkills(dt) {
+  const cdr = Math.max(0.35, 1 - getPassiveLevel('nerve') * 0.1);
+  const areaMult = 1 + getPassiveLevel('core') * 0.18 + getPassiveLevel('blood_s') * 0.15;
+
+  player.formSkillTimer -= dt;
+  if (player.formSkillTimer <= 0) {
+    player.formSkillTimer = 2.3 * cdr;
+    triggerFormInnateSkill(areaMult);
+  }
+
+  player.organs.forEach(org => {
+    if (org.id === 'spikes') return;
+    org.timer -= dt;
+    if (org.timer <= 0) {
+      const lv = org.level;
+      const evo = org.evolved;
+      const nearest = findNearestEnemy(player.x, player.y);
+      const aimAngle = nearest ? Math.atan2(nearest.y - player.y, nearest.x - player.x) : player.angle;
+
+      switch (org.id) {
+        case 'claw':
+          org.timer = (evo ? 0.75 : 1.1) * cdr;
+          spawnClawSlash(
+            player.x + Math.cos(aimAngle) * 32,
+            player.y + Math.sin(aimAngle) * 32,
+            aimAngle,
+            (evo ? 170 : 88 + lv * 12) * areaMult,
+            evo ? '#f43f5e' : '#34d399',
+            (evo ? 72 : 24 + lv * 8),
+            evo
+          );
+          if (evo) player.hp = Math.min(player.maxHp, player.hp + 3.5);
+          break;
+
+        case 'venom':
+          org.timer = (evo ? 1.45 : 2.0) * cdr;
+          for (let i = 0; i < (evo ? 3 : 1 + Math.floor(lv / 3)); i++) {
+            const a = aimAngle + (i - 1) * 0.6;
+            const dist = 80 + Math.random() * 100;
+            groundZones.push({
+              x: player.x + Math.cos(a) * dist,
+              y: player.y + Math.sin(a) * dist,
+              r: (evo ? 96 : 54 + lv * 6) * areaMult,
+              color: evo ? '#84cc16' : '#a3e635',
+              dmg: evo ? 30 : 12 + lv * 4,
+              life: evo ? 3.6 : 2.6, maxLife: evo ? 3.6 : 2.6,
+              tickTimer: 0, type: 'poison_web', rot: Math.random() * Math.PI
+            });
+          }
+          break;
+
+        case 'horn':
+          org.timer = (evo ? 1.05 : 1.65) * cdr;
+          spawnLightningChain(player.x, player.y, evo ? 8 : 2 + lv, evo ? 68 : 25 + lv * 7, evo ? '#fde047' : '#facc15', evo);
+          break;
+
+        case 'firesac':
+          org.timer = (evo ? 1.15 : 1.6) * cdr;
+          const mCount = evo ? 3 : 1;
+          for (let i = 0; i < mCount; i++) {
+            const tx = (nearest ? nearest.x : player.x + Math.cos(aimAngle) * 140) + (Math.random() - 0.5) * (evo ? 160 : 50);
+            const ty = (nearest ? nearest.y : player.y + Math.sin(aimAngle) * 140) + (Math.random() - 0.5) * (evo ? 160 : 50);
+            spawnMeteorStrike(tx, ty, (evo ? 105 : 62 + lv * 7) * areaMult, evo ? '#fde047' : '#fb923c', evo ? 78 : 28 + lv * 9, evo);
+          }
+          break;
+
+        case 'frost_b':
+          org.timer = (evo ? 1.25 : 1.5) * cdr;
+          const count = evo ? 8 : 2 + Math.floor(lv / 2);
+          for (let i = 0; i < count; i++) {
+            const a = evo ? (i * Math.PI * 2) / count : aimAngle + (i - (count - 1) / 2) * 0.22;
+            projectiles.push({
+              x: player.x, y: player.y,
+              vx: Math.cos(a) * 8.5, vy: Math.sin(a) * 8.5,
+              r: evo ? 12 : 9, color: '#38bdf8',
+              dmg: evo ? 52 : 19 + lv * 6,
+              pierce: 2 + getPassiveLevel('crystal'),
+              style: 'ice_sword', evo, life: 1.7
+            });
+          }
+          if (evo) {
+            groundZones.push({
+              x: player.x, y: player.y, r: 135 * areaMult,
+              color: '#38bdf8', dmg: 35, life: 1.8, maxLife: 1.8,
+              tickTimer: 0, type: 'ice_sigil', rot: gameTime
+            });
+          }
+          break;
+
+        case 'eye':
+          org.timer = (evo ? 1.2 : 1.75) * cdr;
+          spawnLaserBeam(player.x, player.y, aimAngle, evo ? 550 : 360, evo ? 16 : 8, evo ? '#f43f5e' : '#f472b6', evo ? 75 : 26 + lv * 8, evo);
+          break;
+
+        case 'tentacle':
+          org.timer = (evo ? 1.3 : 1.85) * cdr;
+          const tTargetX = nearest ? nearest.x : player.x;
+          const tTargetY = nearest ? nearest.y : player.y;
+          if (evo) {
+            groundZones.push({
+              x: tTargetX, y: tTargetY, r: 120 * areaMult,
+              color: '#c084fc', dmg: 28, life: 2.2, maxLife: 2.2,
+              tickTimer: 0, type: 'blackhole', rot: 0
+            });
+          }
+          spawnAbyssTentacles(tTargetX, tTargetY, evo ? 8 : 4 + Math.floor(lv / 2), (evo ? 125 : 78 + lv * 6) * areaMult, '#c084fc', evo ? 66 : 24 + lv * 7, evo);
+          break;
+
+        case 'wing_b':
+          org.timer = (evo ? 1.4 : 1.45) * cdr;
+          if (evo) {
+            for (let i = 0; i < 2; i++) {
+              const a = aimAngle + (i - 0.5) * 0.7;
+              tornadoes.push({
+                x: player.x, y: player.y,
+                vx: Math.cos(a) * 3.8, vy: Math.sin(a) * 3.8,
+                r: 68 * areaMult, color: '#34d399',
+                dmg: 34, life: 3.0, tickTimer: 0, phase: Math.random() * 6
+              });
+            }
+          } else {
+            const shots = 1 + Math.floor(lv / 2);
+            for (let i = 0; i < shots; i++) {
+              const a = aimAngle + (i - (shots - 1) / 2) * 0.3;
+              projectiles.push({
+                x: player.x, y: player.y,
+                vx: Math.cos(a) * 7.2, vy: Math.sin(a) * 7.2,
+                r: 13, color: '#2dd4bf',
+                dmg: 20 + lv * 6, pierce: 3,
+                style: 'wind_shuriken', rot: 0, life: 2.0
+              });
+            }
+          }
+          break;
+
+        case 'tail_h':
+          org.timer = (evo ? 1.35 : 1.9) * cdr;
+          const rockR = (evo ? 185 : 105 + lv * 12) * areaMult;
+          groundZones.push({
+            x: player.x, y: player.y, r: rockR,
+            color: '#fbbf24', dmg: 0, life: 0.55, maxLife: 0.55,
+            tickTimer: 99, type: 'rock_spikes', rot: Math.random() * Math.PI
+          });
+          for (let i = 0; i < enemies.length; i++) {
+            const e = enemies[i];
+            const dx = e.x - player.x, dy = e.y - player.y;
+            if (dx * dx + dy * dy <= (rockR + e.radius) * (rockR + e.radius)) {
+              dealDamage(e, evo ? 70 : 25 + lv * 8, '#fbbf24', 14);
+            }
+          }
+          break;
+
+        case 'sonic':
+          org.timer = (evo ? 1.3 : 1.85) * cdr;
+          const sonicR = (evo ? 195 : 110 + lv * 12) * areaMult;
+          groundZones.push({
+            x: player.x, y: player.y, r: sonicR,
+            color: '#f43f5e', dmg: 0, life: 0.45, maxLife: 0.45,
+            tickTimer: 99, type: 'sonic_bagua', rot: gameTime
+          });
+          for (let i = 0; i < enemies.length; i++) {
+            const e = enemies[i];
+            const dx = e.x - player.x, dy = e.y - player.y;
+            if (dx * dx + dy * dy <= (sonicR + e.radius) * (sonicR + e.radius)) {
+              dealDamage(e, evo ? 65 : 23 + lv * 7, '#f43f5e', 8);
+            }
+          }
+          break;
+
+        case 'spore':
+        default:
+          org.timer = (evo ? 0.95 : 1.4) * cdr;
+          const sCount = evo ? 5 : 1 + Math.floor(lv / 2);
+          for (let i = 0; i < sCount; i++) {
+            const a = aimAngle + (i - (sCount - 1) / 2) * 0.35;
+            projectiles.push({
+              x: player.x, y: player.y,
+              vx: Math.cos(a) * 6.5, vy: Math.sin(a) * 6.5,
+              r: evo ? 12 : 9,
+              color: evo ? '#a3e635' : '#84cc16',
+              dmg: evo ? 48 : 18 + lv * 6,
+              pierce: evo ? 3 : 1,
+              homing: true, style: 'soul_wisp', trail: [], life: 2.3
+            });
+          }
+          break;
+      }
+    }
+  });
+}
+
+function triggerFormInnateSkill(areaMult) {
+  const f = player.form;
+  const stageDmg = 22 * Math.pow(1.65, player.stage - 1);
+  const nearest = findNearestEnemy(player.x, player.y);
+  const aim = nearest ? Math.atan2(nearest.y - player.y, nearest.x - player.x) : player.angle;
+
+  if (f.tags.includes('thunder')) {
+    spawnLightningChain(player.x, player.y, 2 + player.stage * 2, stageDmg, f.secondary, player.stage >= 4);
+  }
+  if (f.tags.includes('wind') || f.tags.includes('blood')) {
+    spawnClawSlash(player.x, player.y, aim, (85 + player.stage * 22) * areaMult, f.secondary, stageDmg, player.stage >= 4);
+  }
+  if (f.tags.includes('fire')) {
+    const tx = nearest ? nearest.x : player.x + Math.cos(aim) * 120;
+    const ty = nearest ? nearest.y : player.y + Math.sin(aim) * 120;
+    spawnMeteorStrike(tx, ty, (65 + player.stage * 16) * areaMult, f.secondary, stageDmg, player.stage >= 4);
+  }
+  if (f.tags.includes('dark') || f.tags.includes('poison')) {
+    const tx = nearest ? nearest.x : player.x;
+    const ty = nearest ? nearest.y : player.y;
+    spawnAbyssTentacles(tx, ty, 3 + player.stage, (65 + player.stage * 15) * areaMult, f.secondary, stageDmg * 0.8, f.tags.includes('dark'));
+  }
+  if (f.tags.includes('ice') || f.tags.includes('phantom') || f.tags.includes('rock')) {
+    const num = 3 + player.stage * 2;
+    for (let i = 0; i < num; i++) {
+      const a = (i * Math.PI * 2) / num + gameTime;
+      projectiles.push({
+        x: player.x, y: player.y,
+        vx: Math.cos(a) * 7.5, vy: Math.sin(a) * 7.5,
+        r: 9 + player.stage, color: f.secondary,
+        dmg: stageDmg * 0.85, pierce: 2,
+        homing: f.tags.includes('phantom'),
+        style: f.tags.includes('ice') ? 'ice_sword' : 'wind_shuriken',
+        rot: a, life: 1.8
+      });
+    }
+  }
+}
+
+// ============================================================================
+// 10. 怪物刷新与 Boss 战
+// ============================================================================
+let spawnTimer = 0;
+let nextBossTime = 45;
+
+const WILD_TYPES = [
+  { name: '荒原骨狼', primary: '#475569', secondary: '#94a3b8', accent: '#38bdf8', hp: 28, speed: 2.1, r: 15 },
+  { name: '赤炎火蜥', primary: '#991b1b', secondary: '#f87171', accent: '#fde047', hp: 42, speed: 1.8, r: 17 },
+  { name: '腐骨毒蝎', primary: '#365314', secondary: '#a3e635', accent: '#c084fc', hp: 36, speed: 2.2, r: 16 },
+  { name: '玄冥鬼蝠', primary: '#4c1d95', secondary: '#c084fc', accent: '#f43f5e', hp: 32, speed: 2.6, r: 15 },
+  { name: '雷泽狂牛', primary: '#78350f', secondary: '#fbbf24', accent: '#38bdf8', hp: 68, speed: 1.7, r: 21 }
+];
+
+function spawnEnemies(dt) {
+  spawnTimer -= dt;
+  if (spawnTimer <= 0 && enemies.length < 115) {
+    spawnTimer = Math.max(0.2, 0.75 - gameTime * 0.002);
+    const count = 1 + Math.floor(gameTime / 35);
+    const scaleMult = 1 + gameTime * 0.025 + Math.pow(player.level, 1.22) * 0.11;
+
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.max(canvas.width, canvas.height) * 0.56 + 70;
+      const t = WILD_TYPES[Math.floor(Math.random() * WILD_TYPES.length)];
+      enemies.push({
+        x: player.x + Math.cos(ang) * dist,
+        y: player.y + Math.sin(ang) * dist,
+        primary: t.primary, secondary: t.secondary, accent: t.accent,
+        maxHp: Math.round(t.hp * scaleMult),
+        hp: Math.round(t.hp * scaleMult),
+        speed: t.speed * (0.9 + Math.random() * 0.25),
+        radius: t.r, angle: 0, walkPhase: Math.random() * 10, hurtTimer: 0, isBoss: false
+      });
+    }
+  }
+
+  if (gameTime >= nextBossTime) {
+    nextBossTime += 55;
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 500;
+    const bossNames = ['太古凶兽·浑沌魔尊', '北冥霸主·深渊狂鲲', '南荒妖帝·九婴鬼车', '不周凶神·刑天魔躯'];
+    const bName = bossNames[Math.floor(Math.random() * bossNames.length)];
+    const hp = Math.round(1400 * (1 + gameTime * 0.04));
+
+    enemies.push({
+      x: player.x + Math.cos(ang) * dist,
+      y: player.y + Math.sin(ang) * dist,
+      name: bName, primary: '#881337', secondary: '#f43f5e', accent: '#fde047',
+      maxHp: hp, hp: hp, speed: 2.15, radius: 44,
+      angle: 0, walkPhase: 0, hurtTimer: 0, isBoss: true
+    });
+
+    const banner = document.getElementById('bossWarning');
+    document.getElementById('bossNameText').textContent = bName;
+    banner.classList.remove('hidden');
+    screenShake = 14;
+    setTimeout(() => banner.classList.add('hidden'), 4000);
+  }
+}
+
+// ============================================================================
+// 11. 主游戏循环：物理更新与零卡顿华丽特效渲染
+// ============================================================================
+let lastTime = performance.now();
+
+function gameLoop(now) {
+  requestAnimationFrame(gameLoop);
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+
+  if (gameState === 'PLAYING') updateGame(dt);
+  if (gameState === 'PLAYING' || gameState === 'PAUSED' || gameState === 'OVER') renderGame();
+}
+
+function updateGame(dt) {
+  gameTime += dt;
+
+  const heartLv = getPassiveLevel('heart');
+  if (heartLv > 0) player.hp = Math.min(player.maxHp, player.hp + heartLv * 2.5 * dt);
+
+  let mx = 0, my = 0;
+  if (keys['w'] || keys['arrowup']) my -= 1;
+  if (keys['s'] || keys['arrowdown']) my += 1;
+  if (keys['a'] || keys['arrowleft']) mx -= 1;
+  if (keys['d'] || keys['arrowright']) mx += 1;
+
+  if (pointer.active) {
+    const dx = pointer.currX - pointer.startX;
+    const dy = pointer.currY - pointer.startY;
+    const len = Math.hypot(dx, dy);
+    if (len > 8) { mx = dx / len; my = dy / len; }
+  }
+
+  const moveLen = Math.hypot(mx, my);
+  if (moveLen > 0) {
+    mx /= moveLen; my /= moveLen;
+    player.x += mx * player.speed * 60 * dt;
+    player.y += my * player.speed * 60 * dt;
+    player.angle = Math.atan2(my, mx);
+    player.walkPhase += dt * 3.8;
+  } else {
+    player.walkPhase += dt * 1.4;
+  }
+
+  if (player.hurtTimer > 0) player.hurtTimer -= dt;
+  if (screenShake > 0) screenShake = Math.max(0, screenShake - dt * 35);
+
+  updateWeaponsAndSkills(dt);
+
+  // 更新太古符文骨剑与丝带轨迹
+  const spikeOrgan = player.organs.find(o => o.id === 'spikes');
+  if (spikeOrgan) {
+    const count = spikeOrgan.evolved ? 8 : 2 + spikeOrgan.level;
+    const orbitR = player.radius + (spikeOrgan.evolved ? 76 : 50);
+    if (orbitingSpikes.length !== count) {
+      orbitingSpikes = Array.from({ length: count }, () => ({ x: player.x, y: player.y, angle: 0, evolved: spikeOrgan.evolved, trail: [] }));
+    }
+    for (let i = 0; i < count; i++) {
+      const a = gameTime * (spikeOrgan.evolved ? 5.2 : 3.4) + (i * Math.PI * 2) / count;
+      const sx = player.x + Math.cos(a) * orbitR;
+      const sy = player.y + Math.sin(a) * orbitR;
+      const sp = orbitingSpikes[i];
+      sp.x = sx; sp.y = sy; sp.angle = a + Math.PI / 2; sp.evolved = spikeOrgan.evolved;
+      sp.trail.push({ x: sx, y: sy });
+      if (sp.trail.length > 7) sp.trail.shift();
+
+      for (let j = 0; j < enemies.length; j++) {
+        const e = enemies[j];
+        if (e.hurtTimer <= 0) {
+          const dx = e.x - sx, dy = e.y - sy;
+          const hitR = e.radius + 16;
+          if (dx * dx + dy * dy < hitR * hitR) {
+            dealDamage(e, spikeOrgan.evolved ? 45 : 16 + spikeOrgan.level * 5, '#fde047', 4);
+          }
+        }
+      }
+    }
+  } else {
+    orbitingSpikes = [];
+  }
+
+  // 更新斜降天火流星
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    const m = meteors[i];
+    m.progress += m.speed * dt;
+    if (m.progress >= 1) {
+      screenShake = Math.max(screenShake, m.isEvolved ? 7 : 3);
+      groundZones.push({
+        x: m.targetX, y: m.targetY, r: m.radius,
+        color: m.color, dmg: m.dmg * 0.35,
+        life: 1.6, maxLife: 1.6, tickTimer: 0.3,
+        type: 'magma_crater', rot: Math.random() * Math.PI
+      });
+      const rSq = m.radius * m.radius;
+      for (let j = 0; j < enemies.length; j++) {
+        const e = enemies[j];
+        const dx = e.x - m.targetX, dy = e.y - m.targetY;
+        if (dx * dx + dy * dy <= rSq) {
+          dealDamage(e, m.dmg, m.color, 8);
+        }
+      }
+      meteors.splice(i, 1);
+    }
+  }
+
+  // 更新游走螺旋龙卷飓风
+  for (let i = tornadoes.length - 1; i >= 0; i--) {
+    const tor = tornadoes[i];
+    tor.x += tor.vx * 60 * dt;
+    tor.y += tor.vy * 60 * dt;
+    tor.life -= dt;
+    tor.phase += dt * 10;
+    tor.tickTimer -= dt;
+    if (tor.tickTimer <= 0) {
+      tor.tickTimer = 0.3;
+      const rSq = (tor.r + 15) * (tor.r + 15);
+      for (let j = 0; j < enemies.length; j++) {
+        const e = enemies[j];
+        const dx = e.x - tor.x, dy = e.y - tor.y;
+        if (dx * dx + dy * dy <= rSq) {
+          dealDamage(e, tor.dmg, tor.color, -6);
+        }
+      }
+    }
+    if (tor.life <= 0) tornadoes.splice(i, 1);
+  }
+
+  // 更新地面法阵区域
+  for (let i = groundZones.length - 1; i >= 0; i--) {
+    const z = groundZones[i];
+    z.life -= dt; z.tickTimer -= dt;
+    if (z.tickTimer <= 0 && z.dmg > 0) {
+      z.tickTimer = 0.45;
+      const rSq = (z.r + 12) * (z.r + 12);
+      for (let j = 0; j < enemies.length; j++) {
+        const e = enemies[j];
+        const dx = e.x - z.x, dy = e.y - z.y;
+        if (dx * dx + dy * dy <= rSq) {
+          dealDamage(e, z.dmg, z.color, z.type === 'blackhole' ? -12 : 1);
+        }
+      }
+    }
+    if (z.life <= 0) groundZones.splice(i, 1);
+  }
+
+  // 更新冰剑、风轮、鬼火骷髅投射物
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    if (p.homing) {
+      const target = findNearestEnemy(p.x, p.y, 340);
+      if (target) {
+        const desired = Math.atan2(target.y - p.y, target.x - p.x);
+        const speed = Math.hypot(p.vx, p.vy);
+        p.vx = p.vx * 0.9 + Math.cos(desired) * speed * 0.1;
+        p.vy = p.vy * 0.9 + Math.sin(desired) * speed * 0.1;
+      }
+    }
+    p.x += p.vx * 60 * dt;
+    p.y += p.vy * 60 * dt;
+    p.rot = (p.rot || 0) + dt * 12;
+    p.life -= dt;
+
+    if (p.trail) {
+      p.trail.push({ x: p.x, y: p.y });
+      if (p.trail.length > 6) p.trail.shift();
+    }
+
+    for (let j = 0; j < enemies.length; j++) {
+      const e = enemies[j];
+      const dx = e.x - p.x, dy = e.y - p.y;
+      const hitR = e.radius + p.r;
+      if (dx * dx + dy * dy < hitR * hitR) {
+        dealDamage(e, p.dmg, p.color, 4);
+        p.pierce--;
+        if (p.pierce <= 0) { p.life = 0; break; }
+      }
+    }
+    if (p.life <= 0) projectiles.splice(i, 1);
+  }
+
+  // 更新敌人
+  spawnEnemies(dt);
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    if (e.hurtTimer > 0) e.hurtTimer -= dt;
+
+    if (e.hp <= 0) {
+      killCount++;
+      if (player.form.id === 'taotie_fiend') player.taotieStacks++;
+      if (expGems.length < 180) {
+        expGems.push({
+          x: e.x, y: e.y,
+          val: e.isBoss ? 55 : 4 + Math.floor(gameTime / 40),
+          color: e.isBoss ? '#fde047' : e.accent,
+          r: e.isBoss ? 11 : 5.5
+        });
+      } else if (expGems.length > 0) {
+        expGems[0].val += 5; // 合并经验防止地面掉落物过多卡顿
+      }
+      enemies.splice(i, 1);
+      continue;
+    }
+
+    const ang = Math.atan2(player.y - e.y, player.x - e.x);
+    e.angle = ang; e.walkPhase += dt * 3;
+    e.x += Math.cos(ang) * e.speed * 60 * dt;
+    e.y += Math.sin(ang) * e.speed * 60 * dt;
+
+    const dx = player.x - e.x, dy = player.y - e.y;
+    const hitR = player.radius + e.radius - 4;
+    if (dx * dx + dy * dy < hitR * hitR) {
+      if (player.hurtTimer <= 0) {
+        const rawDmg = e.isBoss ? 26 : 10 + Math.floor(gameTime / 25);
+        const taken = Math.max(2, rawDmg - player.armor);
+        player.hp -= taken; player.hurtTimer = 0.35; screenShake = 7;
+        if (player.hp <= 0) { triggerGameOver(); return; }
+      }
+    }
+  }
+
+  // 吞噬基因球吸附
+  const pullRange = (115 + getPassiveLevel('stomach') * 42) * (player.form.id === 'chaos_cub' ? 1.25 : 1);
+  const pullRangeSq = pullRange * pullRange;
+  for (let i = expGems.length - 1; i >= 0; i--) {
+    const g = expGems[i];
+    const dx = player.x - g.x, dy = player.y - g.y;
+    const dSq = dx * dx + dy * dy;
+    if (dSq < pullRangeSq) {
+      const dist = Math.sqrt(dSq) || 1;
+      const pullSpd = 10 + (pullRange - dist) * 0.06;
+      g.x += (dx / dist) * pullSpd * 60 * dt;
+      g.y += (dy / dist) * pullSpd * 60 * dt;
+      g.beingPulled = true;
+
+      if (dist < player.radius + 12) {
+        sfx.playDevour();
+        const expGain = Math.round(g.val * (1 + getPassiveLevel('stomach') * 0.12));
+        player.exp += expGain;
+        expGems.splice(i, 1);
+
+        if (player.exp >= player.expNext) {
+          player.exp -= player.expNext;
+          player.level++;
+          player.expNext = Math.round(player.expNext * 1.25 + 12);
+          handleLevelUp();
+          break;
+        }
+      }
+    } else {
+      g.beingPulled = false;
+    }
+  }
+
+  slashEffects = slashEffects.filter(s => (s.life -= dt) > 0);
+  lightningBolts = lightningBolts.filter(l => (l.life -= dt) > 0);
+  laserBeams = laserBeams.filter(b => (b.life -= dt) > 0);
+  abyssTentacles = abyssTentacles.filter(t => (t.life -= dt) > 0);
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.life -= dt; });
+  particles = particles.filter(p => p.life > 0);
+  floatingTexts.forEach(t => { t.y -= 28 * dt; t.life -= dt; });
+  floatingTexts = floatingTexts.filter(t => t.life > 0);
+
+  updateHudNumbers();
+}
+
+// ============================================================================
+// 12. 零卡顿华丽特效渲染管线（使用 lighter 叠加替代昂贵的 shadowBlur）
+// ============================================================================
+function renderGame() {
+  ctx.save();
+  ctx.fillStyle = '#06060f';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+  const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+  const camX = canvas.width / 2 - player.x + shakeX;
+  const camY = canvas.height / 2 - player.y + shakeY;
+
+  ctx.translate(camX, camY);
+  drawMythicalTerrain(ctx);
+
+  // 1. 绘制地面法阵（剧毒蛛网、归墟黑洞、六角冰晶雪花阵、熔岩地裂、岩石尖刺、八卦音浪）
+  for (let i = 0; i < groundZones.length; i++) {
+    const z = groundZones[i];
+    ctx.save();
+    ctx.translate(z.x, z.y);
+    const alpha = Math.min(0.75, (z.life / (z.maxLife || 1)) * 0.85);
+    ctx.globalAlpha = alpha;
+
+    if (z.type === 'poison_web') {
+      // 八角剧毒蛛网阵
+      ctx.strokeStyle = z.color;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (let w = 0; w < 8; w++) {
+        const a = (w * Math.PI) / 4 + z.rot;
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * z.r, Math.sin(a) * z.r);
+      }
+      for (let ring = 0.35; ring <= 1; ring += 0.32) {
+        ctx.moveTo(Math.cos(z.rot) * z.r * ring, Math.sin(z.rot) * z.r * ring);
+        for (let w = 1; w <= 8; w++) {
+          const a = (w * Math.PI) / 4 + z.rot;
+          ctx.lineTo(Math.cos(a) * z.r * ring, Math.sin(a) * z.r * ring);
+        }
+      }
+      ctx.stroke();
+      ctx.fillStyle = z.color + '22';
+      ctx.beginPath(); ctx.arc(0, 0, z.r, 0, Math.PI * 2); ctx.fill();
+
+    } else if (z.type === 'ice_sigil') {
+      // 立体六角雪花冰晶法阵
+      ctx.rotate(z.rot + gameTime * 0.8);
+      ctx.strokeStyle = '#7dd3fc';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k * Math.PI) / 3;
+        const ex = Math.cos(a) * z.r, ey = Math.sin(a) * z.r;
+        ctx.moveTo(0, 0); ctx.lineTo(ex, ey);
+        const mx = Math.cos(a) * z.r * 0.65, my = Math.sin(a) * z.r * 0.65;
+        ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(a + 0.6) * z.r * 0.25, my + Math.sin(a + 0.6) * z.r * 0.25);
+        ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(a - 0.6) * z.r * 0.25, my + Math.sin(a - 0.6) * z.r * 0.25);
+      }
+      ctx.stroke();
+
+    } else if (z.type === 'rock_spikes') {
+      // 破土岩石尖峰群
+      const spikeCount = 12;
+      for (let k = 0; k < spikeCount; k++) {
+        const a = (k * Math.PI * 2) / spikeCount + z.rot;
+        const dist = z.r * (0.45 + (k % 3) * 0.22);
+        const sx = Math.cos(a) * dist, sy = Math.sin(a) * dist;
+        ctx.fillStyle = '#d6d3d1';
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + Math.cos(a) * 26, sy + Math.sin(a) * 26);
+        ctx.lineTo(sx + Math.cos(a + 1.5) * 9, sy + Math.sin(a + 1.5) * 9);
+        ctx.lineTo(sx + Math.cos(a - 1.5) * 9, sy + Math.sin(a - 1.5) * 9);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      }
+
+    } else if (z.type === 'sonic_bagua') {
+      // 天魔乱世曲：多层律动声波环
+      const progress = 1 - (z.life / z.maxLife);
+      const curR = z.r * (0.3 + progress * 0.7);
+      ctx.strokeStyle = '#f43f5e';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      for (let k = 0; k <= 36; k++) {
+        const a = (k * Math.PI * 2) / 36;
+        const waveR = curR + Math.sin(a * 8 + gameTime * 15) * 10;
+        const px = Math.cos(a) * waveR, py = Math.sin(a) * waveR;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath(); ctx.stroke();
+
+    } else if (z.type === 'blackhole') {
+      // 归墟黑洞漩涡
+      ctx.fillStyle = '#05020a';
+      ctx.beginPath(); ctx.arc(0, 0, z.r * 0.45, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 2.5;
+      ctx.rotate(gameTime * 3);
+      for (let arm = 0; arm < 4; arm++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath();
+        ctx.arc(z.r * 0.25, 0, z.r * 0.55, 0, Math.PI * 1.1);
+        ctx.stroke();
+      }
+    } else {
+      // 熔岩火坑与冲击波
+      ctx.fillStyle = z.color + '33';
+      ctx.strokeStyle = z.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, z.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 2. 绘制基因能量晶球
+  for (let i = 0; i < expGems.length; i++) {
+    const g = expGems[i];
+    if (Math.abs(g.x - player.x) > canvas.width * 0.6 || Math.abs(g.y - player.y) > canvas.height * 0.6) continue;
+    if (g.beingPulled) {
+      ctx.strokeStyle = g.color + '66'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(player.x, player.y); ctx.stroke();
+    }
+    ctx.fillStyle = g.color;
+    ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 3. 绘制野生山海怪物与Boss
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (Math.abs(e.x - player.x) > canvas.width * 0.65 || Math.abs(e.y - player.y) > canvas.height * 0.65) continue;
+    drawWildMonster(ctx, e);
+  }
+
+  // 4. 绘制主角山海真身
+  drawMythicalBeast(ctx, player.form, player.x, player.y, player.radius, player.angle, player.walkPhase, player.hurtTimer);
+
+  // ========================================================================
+  // 开启全局高光混合模式 (Additive Blending) 渲染华丽法术与武器特效（零卡顿）
+  // ========================================================================
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  // 5. 绘制太古符文骨剑与丝带残影
+  for (let i = 0; i < orbitingSpikes.length; i++) {
+    const sp = orbitingSpikes[i];
+    if (sp.trail.length > 1) {
+      ctx.strokeStyle = sp.evolved ? 'rgba(251, 191, 36, 0.45)' : 'rgba(214, 211, 209, 0.35)';
+      ctx.lineWidth = sp.evolved ? 8 : 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let t = 0; t < sp.trail.length; t++) {
+        if (t === 0) ctx.moveTo(sp.trail[t].x, sp.trail[t].y);
+        else ctx.lineTo(sp.trail[t].x, sp.trail[t].y);
+      }
+      ctx.stroke();
+    }
+    ctx.save();
+    ctx.translate(sp.x, sp.y); ctx.rotate(sp.angle);
+    ctx.fillStyle = sp.evolved ? '#fde047' : '#f5f5f4';
+    ctx.strokeStyle = sp.evolved ? '#f43f5e' : '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(22, 0); ctx.lineTo(-10, -8); ctx.lineTo(-5, 0); ctx.lineTo(-10, 8);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  // 6. 绘制多关节扭动深渊触须群
+  for (let i = 0; i < abyssTentacles.length; i++) {
+    const ten = abyssTentacles[i];
+    ctx.save();
+    ctx.translate(ten.x, ten.y);
+    ctx.globalAlpha = ten.life / ten.maxLife;
+    ctx.strokeStyle = ten.color;
+    ctx.lineCap = 'round';
+    const segs = 7;
+    let px = 0, py = 0;
+    for (let s = 1; s <= segs; s++) {
+      const ratio = s / segs;
+      const wave = Math.sin(gameTime * 14 + ten.phase + s * 0.8) * 0.4;
+      const a = ten.baseAngle + wave;
+      const nx = Math.cos(a) * (ten.len * ratio);
+      const ny = Math.sin(a) * (ten.len * ratio);
+      ctx.lineWidth = (1 - ratio * 0.75) * 12;
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny); ctx.stroke();
+      px = nx; py = ny;
+    }
+    ctx.restore();
+  }
+
+  // 7. 绘制游走螺旋龙卷飓风
+  for (let i = 0; i < tornadoes.length; i++) {
+    const tor = tornadoes[i];
+    ctx.save();
+    ctx.translate(tor.x, tor.y);
+    ctx.strokeStyle = '#34d399';
+    ctx.lineWidth = 2.5;
+    for (let ring = 0; ring < 4; ring++) {
+      const rr = tor.r * (0.3 + ring * 0.22);
+      const offsetX = Math.cos(tor.phase + ring) * 8;
+      const offsetY = Math.sin(tor.phase + ring) * 8;
+      ctx.beginPath();
+      ctx.arc(offsetX, offsetY, rr, tor.phase + ring, tor.phase + ring + Math.PI * 1.35);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 8. 绘制冰晶飞剑、四叶风轮、幽冥骷髅鬼火弹
+  for (let i = 0; i < projectiles.length; i++) {
+    const p = projectiles[i];
+    if (p.trail && p.trail.length > 1) {
+      ctx.strokeStyle = p.color + '66';
+      ctx.lineWidth = p.r * 0.9;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let t = 0; t < p.trail.length; t++) {
+        if (t === 0) ctx.moveTo(p.trail[t].x, p.trail[t].y);
+        else ctx.lineTo(p.trail[t].x, p.trail[t].y);
+      }
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    if (p.style === 'ice_sword') {
+      // 六棱寒冰利剑
+      ctx.rotate(Math.atan2(p.vy, p.vx));
+      ctx.fillStyle = '#e0f2fe';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.r * 1.9, 0);
+      ctx.lineTo(0, -p.r * 0.65);
+      ctx.lineTo(-p.r * 1.4, 0);
+      ctx.lineTo(0, p.r * 0.65);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    } else if (p.style === 'wind_shuriken') {
+      // 旋转四叶风刃手里剑
+      ctx.rotate(p.rot || 0);
+      ctx.fillStyle = p.color;
+      for (let b = 0; b < 4; b++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(p.r * 0.8, -p.r * 0.6, p.r * 1.6, 0);
+        ctx.quadraticCurveTo(p.r * 0.6, p.r * 0.3, 0, 0);
+        ctx.fill();
+      }
+    } else {
+      // 幽冥鬼火弹
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(0, 0, p.r * 0.45, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 9. 绘制斜降天火流星
+  for (let i = 0; i < meteors.length; i++) {
+    const m = meteors[i];
+    const cx = m.startX + (m.targetX - m.startX) * m.progress;
+    const cy = m.startY + (m.targetY - m.startY) * m.progress;
+
+    // 地面预警圈
+    ctx.strokeStyle = m.color + '88';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(m.targetX, m.targetY, m.radius * m.progress, 0, Math.PI * 2); ctx.stroke();
+
+    // 流星长尾焰与火球核心
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = m.isEvolved ? 22 : 14;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx - 45, cy - 80);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cx, cy, m.isEvolved ? 14 : 9, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 10. 绘制三连立体月牙爪痕 & 泣血修罗巨爪
+  for (let i = 0; i < slashEffects.length; i++) {
+    const s = slashEffects[i];
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(s.angle);
+    ctx.globalAlpha = s.life / s.maxLife;
+
+    const offsets = [-0.28, 0, 0.28];
+    offsets.forEach((off, idx) => {
+      const r = s.radius * (0.72 + idx * 0.14);
+      // 外层辉光月牙
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(0, off * 28, r, -0.95, 0.95, false);
+      ctx.arc(-10, off * 28, r * 0.86, 0.95, -0.95, true);
+      ctx.closePath();
+      ctx.fill();
+
+      // 内层高亮白芯
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = s.isGiant ? 3.5 : 2;
+      ctx.beginPath();
+      ctx.arc(-4, off * 28, r * 0.93, -0.7, 0.7);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // 11. 绘制分形分支天雷与落雷八卦印
+  for (let i = 0; i < lightningBolts.length; i++) {
+    const l = lightningBolts[i];
+    ctx.save();
+    ctx.globalAlpha = l.life / l.maxLife;
+
+    // 外层粗电弧光晕
+    ctx.strokeStyle = l.color;
+    ctx.lineWidth = l.isEvolved ? 9 : 6;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    l.pts.forEach((pt, idx) => { if (idx === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+    ctx.stroke();
+
+    // 内层炽白雷芯
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // 分叉细电弧
+    if (l.branchPts) {
+      ctx.strokeStyle = l.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      l.branchPts.forEach((pt, idx) => { if (idx === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+      ctx.stroke();
+    }
+
+    // 落雷点八卦雷环
+    if (l.targetX !== undefined) {
+      ctx.strokeStyle = l.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(l.targetX, l.targetY, l.isEvolved ? 34 : 20, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 12. 绘制双螺旋高能妖瞳激光炮
+  for (let i = 0; i < laserBeams.length; i++) {
+    const b = laserBeams[i];
+    ctx.save();
+    ctx.globalAlpha = b.life / b.maxLife;
+
+    // 外层宽光束
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = b.width * 2.2;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+
+    // 中心炽白高能核心
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = b.width * 0.75;
+    ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+
+    // 螺旋能量流带
+    ctx.translate(b.x1, b.y1);
+    ctx.rotate(b.angle);
+    ctx.strokeStyle = '#fde047';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let d = 0; d < b.length; d += 18) {
+      const wy = Math.sin(d * 0.06 - gameTime * 25) * (b.width * 1.3);
+      if (d === 0) ctx.moveTo(d, wy); else ctx.lineTo(d, wy);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 13. 绘制受击发光火花粒子
+  for (let i = 0; i < particles.length; i++) {
+    const pt = particles[i];
+    ctx.fillStyle = pt.color;
+    ctx.globalAlpha = pt.life / pt.maxLife;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.restore(); // 结束 lighter 混合模式
+
+  // 14. 绘制伤害飘字
+  ctx.font = '900 13px "Noto Serif SC", sans-serif';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2.5;
+  for (let i = 0; i < floatingTexts.length; i++) {
+    const ft = floatingTexts[i];
+    ctx.fillStyle = ft.color;
+    ctx.strokeText(ft.text, ft.x, ft.y);
+    ctx.fillText(ft.text, ft.x, ft.y);
+  }
+
+  ctx.restore();
+
+  // 触屏/鼠标虚拟摇杆指示器
+  if (pointer.active && gameState === 'PLAYING') {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(245, 208, 97, 0.35)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(pointer.startX, pointer.startY, 42, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(245, 208, 97, 0.55)';
+    ctx.beginPath(); ctx.arc(pointer.currX, pointer.currY, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawMythicalTerrain(ctx) {
+  const gridSize = 180;
+  const startX = Math.floor((player.x - canvas.width / 2) / gridSize) * gridSize;
+  const startY = Math.floor((player.y - canvas.height / 2) / gridSize) * gridSize;
+
+  ctx.strokeStyle = 'rgba(212, 175, 55, 0.045)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = startX; x < player.x + canvas.width / 2 + gridSize; x += gridSize) {
+    ctx.moveTo(x, player.y - canvas.height / 2); ctx.lineTo(x, player.y + canvas.height / 2);
+  }
+  for (let y = startY; y < player.y + canvas.height / 2 + gridSize; y += gridSize) {
+    ctx.moveTo(player.x - canvas.width / 2, y); ctx.lineTo(player.x + canvas.width / 2, y);
+  }
+  ctx.stroke();
+
+  for (let i = 0; i < MAP_FEATURES.length; i++) {
+    const f = MAP_FEATURES[i];
+    if (Math.abs(f.x - player.x) > canvas.width * 0.65 || Math.abs(f.y - player.y) > canvas.height * 0.65) continue;
+    ctx.strokeStyle = f.color + '1a'; ctx.fillStyle = f.color + '08'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+}
+
+// ============================================================================
+// 13. 升级与五阶形态进化 UI 交互逻辑（彻底修复徽章折行挤压）
+// ============================================================================
+function handleLevelUp() {
+  sfx.playEvolution();
+  const stageMap = { 5: 2, 10: 3, 15: 4, 20: 5 };
+  if (stageMap[player.level] && player.stage < stageMap[player.level]) {
+    openStageEvolutionModal(stageMap[player.level]);
+  } else {
+    openOrganUpgradeModal();
+  }
+}
+
+function openOrganUpgradeModal() {
+  gameState = 'PAUSED';
+  const modal = document.getElementById('upgradeModal');
+  const container = document.getElementById('upgradeCardsContainer');
+  container.innerHTML = '';
+
+  const choices = generateUpgradeChoices();
+  choices.forEach(item => {
+    const isSynergy = item.type === 'synergy';
+    const def = item.def;
+    const card = document.createElement('div');
+    card.className = `evo-card rounded-xl p-5 flex flex-col justify-between cursor-pointer ${isSynergy ? 'synergy-card' : ''}`;
+
+    // 使用 badge-nowrap 强制单行显示，绝不折行成 "[毒] 基 / 因"
+    const tagBadges = (def.tags || []).map(t => {
+      const gt = GENE_TAGS[t];
+      return `<span class="badge-nowrap px-2.5 py-0.5 rounded text-xs font-bold" style="background:${gt.bg};color:${gt.color};border:1px solid ${gt.color}66">[${gt.name}] 基因</span>`;
+    }).join('');
+
+    const typeLabel = isSynergy
+      ? '🔥 超武共鸣'
+      : (item.type === 'active' ? `主动器官 · Lv.${item.nextLv}` : (item.type === 'passive' ? `突变基因 · Lv.${item.nextLv}` : '太古精血'));
+
+    card.innerHTML = `
+      <div>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3.5">
+          <span class="badge-nowrap text-xs font-bold px-2.5 py-1 rounded ${isSynergy ? 'bg-amber-400 text-slate-950' : (item.type === 'active' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30')}">
+            ${typeLabel}
+          </span>
+          <div class="flex items-center gap-1.5 flex-wrap">${tagBadges}</div>
+        </div>
+        <div class="flex items-center gap-3.5 mb-3">
+          <div class="w-14 h-14 rounded-xl bg-slate-950 border border-amber-500/40 p-2.5 shrink-0 shadow-inner">
+            ${getOrganSvg(def.id, def.color)}
+          </div>
+          <div class="min-w-0">
+            <h3 class="text-xl font-bold truncate ${isSynergy ? 'text-amber-300' : 'text-amber-100'}">${isSynergy ? def.synergyName : def.name}</h3>
+            ${isSynergy ? `<div class="text-[11px] text-amber-300/90 mt-0.5">由【${def.name} Lv.5】共鸣觉醒</div>` : ''}
+          </div>
+        </div>
+        <p class="text-xs md:text-sm text-slate-300 leading-relaxed">${isSynergy ? def.synergyDesc : def.desc}</p>
+      </div>
+      <div class="mt-4 pt-2.5 border-t border-amber-500/20 text-center text-xs font-bold text-amber-300">
+        点击吞噬融合 ➔
+      </div>
+    `;
+
+    card.onclick = () => {
+      if (isSynergy) {
+        const owned = player.organs.find(o => o.id === item.organId);
+        if (owned) owned.evolved = true;
+      } else if (item.type === 'active') {
+        const owned = player.organs.find(o => o.id === def.id);
+        if (owned) owned.level++;
+        else player.organs.push({ id: def.id, level: 1, evolved: false, timer: 0.1 });
+      } else if (item.type === 'passive') {
+        const owned = player.passives.find(p => p.id === def.id);
+        if (owned) owned.level++;
+        else player.passives.push({ id: def.id, level: 1 });
+      } else {
+        player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.6);
+        player.taotieStacks += 25;
+      }
+      recalculateStatsAndGenes();
+      modal.classList.add('hidden');
+      gameState = 'PLAYING';
+    };
+    container.appendChild(card);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+function openStageEvolutionModal(targetStage) {
+  gameState = 'PAUSED';
+  const modal = document.getElementById('evolutionModal');
+  const container = document.getElementById('evoCardsContainer');
+  container.innerHTML = '';
+
+  const stageNames = {
+    2: '二阶荒古凶兽 · 血脉觉醒',
+    3: '三阶太古灵兽 · 化形蜕变',
+    4: '四阶洪荒神兽 · 法相降临',
+    5: '五阶神话创世 · 大道真身'
+  };
+  document.getElementById('evoStageTitle').textContent = stageNames[targetStage];
+
+  const matched3 = matchTop3FormsForStage(targetStage);
+  matched3.forEach((entry, idx) => {
+    const f = entry.form;
+    const card = document.createElement('div');
+    card.className = 'evo-card rounded-2xl p-5 flex flex-col justify-between cursor-pointer border-2 border-amber-500/40';
+
+    const tagBadges = f.tags.map(t => {
+      const gt = GENE_TAGS[t];
+      return `<span class="badge-nowrap px-2 py-0.5 rounded text-xs font-bold" style="background:${gt.bg};color:${gt.color};border:1px solid ${gt.color}66">[${gt.name}]</span>`;
+    }).join('');
+
+    card.innerHTML = `
+      <div>
+        <div class="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
+          <span class="badge-nowrap text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+            基因契合度 ${entry.matchPct}%
+          </span>
+          <div class="flex gap-1 flex-wrap">${tagBadges}</div>
+        </div>
+        <div class="w-full h-36 rounded-xl bg-slate-950/90 border border-amber-500/30 mb-3 flex items-center justify-center relative overflow-hidden">
+          <canvas id="evoPreviewCanvas_${idx}" width="220" height="140"></canvas>
+        </div>
+        <div class="text-xs text-amber-400/80 font-bold">${f.title}</div>
+        <h3 class="text-2xl font-calligraphy text-amber-200 mb-2">${f.name}</h3>
+        <div class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/20 mb-3 text-xs">
+          <div class="text-amber-300 font-bold mb-0.5">✨ 本命神通：【${f.skillName}】</div>
+          <div class="text-slate-300 leading-relaxed">${f.skillDesc}</div>
+        </div>
+        <div class="grid grid-cols-3 gap-1.5 text-[11px] text-center">
+          <div class="badge-nowrap bg-slate-900/70 py-1 rounded border border-rose-500/20 text-rose-300">气血 ${f.stats.hp}</div>
+          <div class="badge-nowrap bg-slate-900/70 py-1 rounded border border-amber-500/20 text-amber-300">战力 ×${f.stats.dmgMult}</div>
+          <div class="badge-nowrap bg-slate-900/70 py-1 rounded border border-cyan-500/20 text-cyan-300">护甲 ${f.stats.armor}</div>
+        </div>
+      </div>
+      <button class="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-sm tracking-wider cursor-pointer">
+        🔥 蜕变进化为【${f.name}】
+      </button>
+    `;
+
+    card.onclick = () => {
+      player.stage = targetStage;
+      player.form = f;
+      recalculateStatsAndGenes();
+      player.hp = player.maxHp;
+      screenShake = 12;
+      sfx.playEvolution();
+      modal.classList.add('hidden');
+      gameState = 'PLAYING';
+    };
+
+    container.appendChild(card);
+
+    setTimeout(() => {
+      const cvs = document.getElementById(`evoPreviewCanvas_${idx}`);
+      if (cvs) {
+        const c = cvs.getContext('2d');
+        drawMythicalBeast(c, f, 110, 72, 34, -Math.PI / 6, idx * 1.5, 0);
+      }
+    }, 20);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+// ============================================================================
+// 14. HUD 面板、试炼台与万兽图鉴
+// ============================================================================
+function updateHudUI() {
+  const stageLabels = { 1: '一阶幼兽', 2: '二阶凶兽', 3: '三阶灵兽', 4: '四阶神兽', 5: '五阶创世' };
+  document.getElementById('hudStageBadge').textContent = stageLabels[player.stage];
+  document.getElementById('hudFormName').textContent = player.form.name;
+  document.getElementById('hudLevel').textContent = `Lv.${player.level}`;
+
+  const geneBar = document.getElementById('geneAffinityBar');
+  geneBar.innerHTML = `<span class="text-[11px] text-amber-300/80 mr-1 font-bold badge-nowrap">基因亲和:</span>`;
+  Object.values(GENE_TAGS).forEach(gt => {
+    const val = player.geneCounts[gt.id] || 0;
+    const badge = document.createElement('span');
+    badge.className = 'badge-nowrap px-1.5 py-0.5 rounded text-[11px] font-bold flex items-center gap-0.5';
+    badge.style.background = val > 0 ? gt.bg : 'rgba(30,41,59,0.5)';
+    badge.style.color = val > 0 ? gt.color : '#64748b';
+    badge.style.border = `1px solid ${val > 0 ? gt.color + '66' : 'rgba(100,116,139,0.2)'}`;
+    badge.innerHTML = `${gt.name}<b>${val}</b>`;
+    geneBar.appendChild(badge);
+  });
+
+  const activeSlots = document.getElementById('activeSlots');
+  activeSlots.innerHTML = '';
+  player.organs.forEach(o => {
+    const def = ACTIVE_ORGANS.find(a => a.id === o.id);
+    if (!def) return;
+    const div = document.createElement('div');
+    div.className = `w-8 h-8 rounded bg-slate-950 p-1 relative border ${o.evolved ? 'border-amber-400 shadow-[0_0_8px_#fbbf24]' : 'border-amber-500/40'}`;
+    div.title = `${o.evolved ? def.synergyName : def.name} (Lv.${o.level})`;
+    div.innerHTML = `${getOrganSvg(def.id, def.color)}<span class="absolute -bottom-1 -right-1 text-[9px] bg-slate-900 px-1 rounded font-bold text-amber-300">${o.evolved ? '★' : o.level}</span>`;
+    activeSlots.appendChild(div);
+  });
+
+  const passiveSlots = document.getElementById('passiveSlots');
+  passiveSlots.innerHTML = '';
+  player.passives.forEach(p => {
+    const def = PASSIVE_GENES.find(g => g.id === p.id);
+    if (!def) return;
+    const div = document.createElement('div');
+    div.className = 'w-8 h-8 rounded bg-slate-950 p-1 relative border border-cyan-500/40';
+    div.title = `${def.name} (Lv.${p.level})`;
+    div.innerHTML = `${getOrganSvg(def.id, def.color)}<span class="absolute -bottom-1 -right-1 text-[9px] bg-slate-900 px-1 rounded font-bold text-cyan-300">${p.level}</span>`;
+    passiveSlots.appendChild(div);
+  });
+}
+
+function updateHudNumbers() {
+  const hpPct = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
+  document.getElementById('hpBar').style.width = `${hpPct}%`;
+  document.getElementById('hpText').textContent = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+
+  const expPct = Math.max(0, Math.min(100, (player.exp / player.expNext) * 100));
+  document.getElementById('expBar').style.width = `${expPct}%`;
+  const nextEvoLv = player.level < 5 ? 5 : (player.level < 10 ? 10 : (player.level < 15 ? 15 : (player.level < 20 ? 20 : '已登顶')));
+  document.getElementById('expText').textContent = `吞噬基因：${player.exp} / ${player.expNext} (下一阶真身蜕变: Lv.${nextEvoLv})`;
+
+  const mins = String(Math.floor(gameTime / 60)).padStart(2, '0');
+  const secs = String(Math.floor(gameTime % 60)).padStart(2, '0');
+  document.getElementById('hudTimer').textContent = `${mins}:${secs}`;
+  document.getElementById('hudKills').textContent = killCount;
+}
+
+function renderCodexModal() {
+  const formsContainer = document.getElementById('codexContentForms');
+  formsContainer.innerHTML = '';
+
+  const stageTitles = {
+    1: '一阶 · 洪荒初始幼兽 (Lv.1)',
+    2: '二阶 · 荒古凶兽 (Lv.5 · 根据基因亲和 9 选 3)',
+    3: '三阶 · 太古灵兽 (Lv.10 · 根据基因亲和 9 选 3)',
+    4: '四阶 · 洪荒神兽 (Lv.15 · 根据基因亲和 9 选 3)',
+    5: '五阶 · 神话创世真身 (Lv.20 · 根据基因亲和 9 选 3)'
+  };
+
+  for (let s = 1; s <= 5; s++) {
+    const list = ALL_FORMS['stage' + s];
+    const section = document.createElement('div');
+    section.innerHTML = `<h3 class="text-lg font-bold text-amber-300 border-l-4 border-amber-400 pl-3 mb-3">${stageTitles[s]}</h3>`;
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3';
+
+    list.forEach(f => {
+      const tagsHtml = f.tags.map(t => `<span class="badge-nowrap px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:${GENE_TAGS[t].bg};color:${GENE_TAGS[t].color}">[${GENE_TAGS[t].name}]</span>`).join('');
+      const card = document.createElement('div');
+      card.className = 'bg-slate-900/90 border border-amber-500/25 rounded-xl p-3 flex items-center gap-3';
+      card.innerHTML = `
+        <canvas id="codex_cvs_${f.id}" width="92" height="92" class="w-20 h-20 rounded-lg bg-slate-950 border border-amber-500/20 shrink-0"></canvas>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-1">
+            <span class="font-bold text-amber-200 text-base truncate">${f.name}</span>
+            <div class="flex gap-1 shrink-0">${tagsHtml}</div>
+          </div>
+          <div class="text-[11px] text-amber-400/80 mb-1">${f.title}</div>
+          <div class="text-[11px] text-slate-300 leading-snug"><b class="text-emerald-300">${f.skillName}：</b>${f.skillDesc}</div>
+        </div>
+      `;
+      grid.appendChild(card);
+
+      setTimeout(() => {
+        const cvs = document.getElementById(`codex_cvs_${f.id}`);
+        if (cvs) {
+          const c = cvs.getContext('2d');
+          drawMythicalBeast(c, f, 46, 46, 22, -Math.PI / 5, 1.2, 0);
+        }
+      }, 30);
+    });
+
+    section.appendChild(grid);
+    formsContainer.appendChild(section);
+  }
+
+  const synGrid = document.getElementById('synergyListGrid');
+  synGrid.innerHTML = '';
+  ACTIVE_ORGANS.forEach(act => {
+    const pas = PASSIVE_GENES.find(p => p.id === act.pairPassive);
+    const div = document.createElement('div');
+    div.className = 'bg-slate-900/90 border border-amber-500/35 rounded-xl p-4 flex flex-col justify-between';
+    div.innerHTML = `
+      <div>
+        <div class="text-xs font-bold text-amber-400 mb-2">🔥 基因联动超武配方</div>
+        <div class="flex items-center gap-2 mb-3 bg-slate-950/90 p-2.5 rounded-lg border border-amber-500/20 flex-wrap">
+          <span class="badge-nowrap text-xs font-bold text-amber-200">${act.name} (Lv.5)</span>
+          <span class="text-amber-400 font-bold">+</span>
+          <span class="badge-nowrap text-xs font-bold text-cyan-300">${pas ? pas.name : ''} (Lv.1+)</span>
+        </div>
+        <h4 class="text-lg font-bold text-amber-300 mb-1">➔ 【${act.synergyName}】</h4>
+        <p class="text-xs text-slate-300 leading-relaxed">${act.synergyDesc}</p>
+      </div>
+    `;
+    synGrid.appendChild(div);
+  });
+}
+
+// ============================================================================
+// 15. 游戏启动、试炼台指令与事件绑定
+// ============================================================================
+function startNewGame() {
+  sfx.init();
+  gameTime = 0; killCount = 0;
+  player.x = 0; player.y = 0;
+  player.stage = 1; player.level = 1;
+  player.exp = 0; player.expNext = 18;
+  player.form = ALL_FORMS.stage1[0];
+  player.taotieStacks = 0;
+  player.organs = [{ id: 'claw', level: 1, evolved: false, timer: 0.1 }];
+  player.passives = [];
+
+  enemies = []; projectiles = []; meteors = []; slashEffects = [];
+  lightningBolts = []; laserBeams = []; abyssTentacles = [];
+  groundZones = []; tornadoes = []; orbitingSpikes = [];
+  particles = []; floatingTexts = []; expGems = [];
+  nextBossTime = 45;
+
+  recalculateStatsAndGenes();
+  player.hp = player.maxHp;
+
+  document.getElementById('startModal').classList.add('hidden');
+  document.getElementById('gameOverModal').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  gameState = 'PLAYING';
+}
+
+function triggerGameOver() {
+  gameState = 'OVER';
+  const modal = document.getElementById('gameOverModal');
+  modal.classList.remove('hidden');
+
+  const cvs = document.getElementById('endFormPreview');
+  const c = cvs.getContext('2d');
+  c.clearRect(0, 0, cvs.width, cvs.height);
+  drawMythicalBeast(c, player.form, 80, 80, 36, -Math.PI / 6, 2.0, 0);
+
+  const mins = String(Math.floor(gameTime / 60)).padStart(2, '0');
+  const secs = String(Math.floor(gameTime % 60)).padStart(2, '0');
+  document.getElementById('endStats').innerHTML = `
+    <div class="flex justify-between"><span>最终山海真身：</span><b class="text-amber-300">${player.form.name} (${player.stage}阶 · Lv.${player.level})</b></div>
+    <div class="flex justify-between"><span>存活洪荒纪元：</span><b class="text-emerald-300">${mins}分${secs}秒</b></div>
+    <div class="flex justify-between"><span>吞噬荒兽总数：</span><b class="text-rose-300">${killCount} 只</b></div>
+  `;
+}
+
+const previewForms = [
+  ALL_FORMS.stage1[0],
+  ALL_FORMS.stage2[0],
+  ALL_FORMS.stage3[0],
+  ALL_FORMS.stage4[1],
+  ALL_FORMS.stage5[1]
+];
+function animateStartPreview() {
+  if (gameState === 'START') {
+    const cvs = document.getElementById('heroPreviewCanvas');
+    if (cvs) {
+      const c = cvs.getContext('2d');
+      c.clearRect(0, 0, cvs.width, cvs.height);
+      const t = performance.now() / 1000;
+      previewForms.forEach((f, idx) => {
+        const px = 78 + idx * 130;
+        const py = 96;
+        const r = 18 + idx * 3.5;
+        drawMythicalBeast(c, f, px, py, r, -Math.PI / 5 + Math.sin(t + idx) * 0.15, t * 2 + idx, 0);
+        c.font = 'bold 12px "Noto Serif SC", serif';
+        c.fillStyle = '#fde68a';
+        c.textAlign = 'center';
+        c.fillText(`${idx + 1}阶·${f.name}`, px, 178);
+      });
+    }
+  }
+  requestAnimationFrame(animateStartPreview);
+}
+
+document.getElementById('btnStartGame').onclick = startNewGame;
+document.getElementById('btnRestart').onclick = startNewGame;
+
+// 神通试炼台快捷按钮
+document.getElementById('btnSandboxToggle').onclick = () => {
+  const p = document.getElementById('sandboxPanel');
+  if (p.classList.contains('hidden')) {
+    p.classList.remove('hidden'); p.classList.add('flex');
+  } else {
+    p.classList.add('hidden'); p.classList.remove('flex');
+  }
+};
+document.getElementById('btnCheatLvUp').onclick = () => {
+  if (gameState !== 'PLAYING') return;
+  player.level++;
+  handleLevelUp();
+};
+document.getElementById('btnCheatNextStage').onclick = () => {
+  if (gameState !== 'PLAYING') return;
+  const nextS = Math.min(5, player.stage + 1);
+  player.level = Math.max(player.level, (nextS - 1) * 5);
+  openStageEvolutionModal(nextS);
+};
+document.getElementById('btnCheatUnlockSynergy').onclick = () => {
+  if (gameState !== 'PLAYING') return;
+  player.organs.forEach(o => { o.level = 5; o.evolved = true; });
+  recalculateStatsAndGenes();
+};
+document.getElementById('btnCheatAllSynergy').onclick = () => {
+  if (gameState !== 'PLAYING') return;
+  const pick6 = ['claw', 'horn', 'firesac', 'frost_b', 'eye', 'tentacle'];
+  player.organs = pick6.map(id => ({ id, level: 5, evolved: true, timer: 0.1 }));
+  player.passives = ['fang', 'nerve', 'core', 'crystal', 'spirit', 'stomach'].map(id => ({ id, level: 5 }));
+  recalculateStatsAndGenes();
+};
+
+let prevGameStateBeforeCodex = 'START';
+function openCodex() {
+  prevGameStateBeforeCodex = gameState;
+  if (gameState === 'PLAYING') gameState = 'PAUSED';
+  renderCodexModal();
+  document.getElementById('codexModal').classList.remove('hidden');
+}
+document.getElementById('btnOpenCodexStart').onclick = openCodex;
+document.getElementById('btnOpenCodexHud').onclick = openCodex;
+document.getElementById('btnCloseCodex').onclick = () => {
+  document.getElementById('codexModal').classList.add('hidden');
+  if (prevGameStateBeforeCodex === 'PLAYING') gameState = 'PLAYING';
+};
+
+document.getElementById('tabBtnForms').onclick = () => {
+  document.getElementById('codexContentForms').classList.remove('hidden');
+  document.getElementById('codexContentSynergies').classList.add('hidden');
+  document.getElementById('tabBtnForms').className = 'badge-nowrap px-4 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer';
+  document.getElementById('tabBtnSynergies').className = 'badge-nowrap px-4 py-1.5 rounded-lg bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer';
+};
+document.getElementById('tabBtnSynergies').onclick = () => {
+  document.getElementById('codexContentForms').classList.add('hidden');
+  document.getElementById('codexContentSynergies').classList.remove('hidden');
+  document.getElementById('tabBtnSynergies').className = 'badge-nowrap px-4 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer';
+  document.getElementById('tabBtnForms').className = 'badge-nowrap px-4 py-1.5 rounded-lg bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer';
+};
+
+requestAnimationFrame(gameLoop);
+requestAnimationFrame(animateStartPreview);
+</script>
+</body>
+</html>

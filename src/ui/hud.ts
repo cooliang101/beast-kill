@@ -60,7 +60,7 @@ export class Hud {
     Object.values(GENE_TAGS).forEach((gt) => {
       const val = player.geneCounts[gt.id] || 0;
       const badge = document.createElement('span');
-      badge.className = 'badge-nowrap px-1.5 py-0.5 rounded text-[11px] font-bold flex items-center gap-0.5';
+      badge.className = 'badge-nowrap px-1.5 py-0.5 rounded-none text-[11px] font-bold flex items-center gap-0.5';
       badge.style.background = val > 0 ? gt.bg : 'rgba(30,41,59,0.5)';
       badge.style.color = val > 0 ? gt.color : '#64748b';
       badge.style.border = `1px solid ${val > 0 ? gt.color + '66' : 'rgba(100,116,139,0.2)'}`;
@@ -73,9 +73,9 @@ export class Hud {
       const def = ACTIVE_ORGANS.find((a) => a.id === o.id);
       if (!def) return;
       const div = document.createElement('div');
-      div.className = `w-8 h-8 rounded bg-slate-950 p-1 relative border ${o.evolved ? 'border-amber-400 shadow-[0_0_8px_#fbbf24]' : 'border-amber-500/40'}`;
+      div.className = `w-8 h-8 rounded-none bg-slate-950 p-1 relative border ${o.evolved ? 'border-amber-400 shadow-[0_0_8px_#fbbf24]' : 'border-amber-500/40'}`;
       div.title = `${o.evolved ? def.synergyName : def.name} (Lv.${o.level})`;
-      div.innerHTML = `${getOrganSvg(def.id, def.color)}<span class="absolute -bottom-1 -right-1 text-[9px] bg-slate-900 px-1 rounded font-bold text-amber-300">${o.evolved ? '★' : o.level}</span>`;
+      div.innerHTML = `${getOrganSvg(def.id, def.color)}<span class="absolute -bottom-1 -right-1 text-[9px] bg-slate-900 px-1 rounded-none font-bold text-amber-300">${o.evolved ? '★' : o.level}</span>`;
       this.activeSlots.appendChild(div);
     });
 
@@ -84,9 +84,9 @@ export class Hud {
       const def = PASSIVE_GENES.find((g) => g.id === p.id);
       if (!def) return;
       const div = document.createElement('div');
-      div.className = 'w-8 h-8 rounded bg-slate-950 p-1 relative border border-cyan-500/40';
+      div.className = 'w-8 h-8 rounded-none bg-slate-950 p-1 relative border border-cyan-500/40';
       div.title = `${def.name} (Lv.${p.level})`;
-      div.innerHTML = `${getOrganSvg(def.id, def.color)}<span class="absolute -bottom-1 -right-1 text-[9px] bg-slate-900 px-1 rounded font-bold text-cyan-300">${p.level}</span>`;
+      div.innerHTML = `${getOrganSvg(def.id, def.color)}<span class="absolute -bottom-1 -right-1 text-[9px] bg-slate-900 px-1 rounded-none font-bold text-cyan-300">${p.level}</span>`;
       this.passiveSlots.appendChild(div);
     });
   }

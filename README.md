@@ -10,10 +10,11 @@
 |---|---|
 | 语言/构建 | TypeScript（strict）+ Vite |
 | 渲染 | PixiJS v8（WebGL，`preference: 'webgl'`；贴图烘焙 + 精灵批渲染） |
+| 美术 | 程序化**像素风**：所有异兽由像素图元实时生成（非手绘贴图），启动时烘焙成低分辨率贴图，最近邻放大 3 倍 |
 | 模拟 | 自研数据导向实体层：对象池 + 均匀网格空间哈希 + 固定 60Hz 时间步 |
-| UI | DOM 覆盖层 + Tailwind CSS v4（HUD/弹窗不进渲染热路径） |
+| UI | DOM 覆盖层 + Tailwind CSS v4（硬边框/阶梯色阶/抖动底纹，HUD 不进渲染热路径） |
 | 音频 | Web Audio 合成（带节流阀） |
-| 测试 | Vitest（纯逻辑 + 模拟层集成，Node 环境）+ Playwright（真实浏览器冒烟） |
+| 测试 | Vitest（纯逻辑 + 模拟层集成，Node 环境）+ Playwright（真实浏览器冒烟 + 美术截图） |
 
 ## 快速开始
 
@@ -32,6 +33,7 @@ npm run dev        # 开发服务器（默认 http://localhost:5173）
 | `npm run typecheck` | 仅类型检查（tsc --noEmit） |
 | `npm test` | 跑全部单测（纯逻辑 + 模拟层集成，Node 环境） |
 | `npm run smoke` | 真实浏览器冒烟测试：无头 Chromium 自动跑「开始 → ESC 暂停/恢复 → 图鉴流转 → 升级弹窗拦截 → 压测」，截图存 `tools/screenshots/` |
+| `npm run shots` | 美术审查截图：封面/图鉴 37 形态/进化卡/战斗特效/压测/暂停菜单/本局构筑 |
 | `npx vitest run tests/sim.test.ts` | 只跑单个测试文件 |
 
 > 首次运行 `npm run smoke` 需要已安装 Playwright 的 Chromium（`npx playwright install chromium`）。
@@ -52,6 +54,17 @@ tools/extract-data.mjs   # 从 legacy 演示提取数据表生成 src/config/*.t
 legacy/                  # 原单文件演示（数值与手感的参照基准，勿改）
 tests/                   # Vitest：空间哈希 / 基因 / 升级 / 进化 / 模拟集成
 ```
+
+## 像素美术管线
+
+异兽美术**不是手绘贴图**，而是由 `src/render/painter.ts` 用像素图元程序化生成——因此加一种新形态只需给数据表加一条记录，角色/敌人/图鉴缩略图/进化卡/封面预览会同时更新。
+
+- **颗粒尺度**：`src/render/pixel.ts` 里的 `TEXEL = 3`（1 个艺术像素 = 3 个世界像素）。改这一个常数就能整体调粗/调细画面颗粒。
+- **换算规则**：贴图声明艺术半径 `texelR`，运行时 `sprite.scale = 世界半径 / texelR`，保证小怪与巨兽的像素颗粒一样大。
+- **硬边**：关闭抗锯齿 + 最近邻采样 + 精灵坐标取整；特效线条的顶点量化到像素网格、方头线帽。
+- **深色形态**：`bodyFill()` 会自动提亮过暗的体色，避免在深色描边下变成一团黑影。
+- **UI**：方角、硬投影、阶梯色带（`repeating-linear-gradient` 硬停止），刻意不用模糊与柔和渐变。
+- 想看效果：`npm run shots` 生成全套美术截图。
 
 ## 性能设计（"不卡"的实现方式）
 

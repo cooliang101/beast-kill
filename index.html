@@ -15,22 +15,22 @@
 <!-- 顶部 HUD -->
 <div id="hud" class="fixed top-0 left-0 right-0 p-3 md:p-4 pointer-events-none flex flex-col gap-2 z-20 hidden">
   <div class="w-full max-w-6xl mx-auto flex flex-wrap items-center gap-3">
-    <div class="myth-panel px-3.5 py-1.5 rounded-lg flex items-center gap-2 shrink-0">
-      <span id="hudStageBadge" class="badge-nowrap text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40">一阶幼兽</span>
+    <div class="myth-panel px-3.5 py-1.5 rounded-none flex items-center gap-2 shrink-0">
+      <span id="hudStageBadge" class="badge-nowrap text-xs font-bold px-2 py-0.5 rounded-none bg-amber-500/20 text-amber-300 border border-amber-400/40">一阶幼兽</span>
       <span id="hudFormName" class="badge-nowrap text-base md:text-lg font-bold text-amber-100 tracking-wider font-calligraphy">混沌幼崽</span>
       <span id="hudLevel" class="badge-nowrap text-sm font-bold text-emerald-400 ml-1">Lv.1</span>
     </div>
 
     <!-- 吞噬基因经验槽 -->
-    <div class="flex-1 h-5 bg-slate-950/90 rounded-full p-0.5 border border-amber-500/40 shadow-inner relative overflow-hidden">
-      <div id="expBar" class="h-full bar-exp rounded-full transition-all duration-150 bar-shine" style="width: 0%"></div>
+    <div class="flex-1 h-5 bg-slate-950/90 rounded-none p-0.5 border border-amber-500/40 shadow-inner relative overflow-hidden">
+      <div id="expBar" class="h-full bar-exp rounded-none transition-all duration-150 bar-shine" style="width: 0%"></div>
       <div id="expText" class="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-white drop-shadow truncate px-2">
         吞噬基因：0 / 18 (下一阶进化: Lv.5)
       </div>
     </div>
 
     <!-- 计时与功能按钮 -->
-    <div class="myth-panel px-3 py-1.5 rounded-lg flex items-center gap-3 shrink-0 text-xs md:text-sm">
+    <div class="myth-panel px-3 py-1.5 rounded-none flex items-center gap-3 shrink-0 text-xs md:text-sm">
       <div class="flex items-center gap-1 badge-nowrap">
         <span class="text-amber-400">⏳</span>
         <span id="hudTimer" class="font-mono font-bold text-amber-100">00:00</span>
@@ -39,13 +39,13 @@
         <span class="text-rose-400">💀</span>
         <span id="hudKills" class="font-mono font-bold text-rose-200">0</span>
       </div>
-      <button id="btnSandboxToggle" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded bg-purple-600/30 hover:bg-purple-500/50 border border-purple-400/60 text-purple-200 text-xs font-bold transition cursor-pointer">
+      <button id="btnSandboxToggle" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded-none bg-purple-600/30 hover:bg-purple-500/50 border border-purple-400/60 text-purple-200 text-xs font-bold transition cursor-pointer">
         ✨ 神通试炼台
       </button>
-      <button id="btnPause" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded bg-slate-700/50 hover:bg-slate-600/70 border border-slate-400/50 text-slate-100 text-xs font-bold transition cursor-pointer">
+      <button id="btnPause" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded-none bg-slate-700/50 hover:bg-slate-600/70 border border-slate-400/50 text-slate-100 text-xs font-bold transition cursor-pointer">
         ⏸ 暂停
       </button>
-      <button id="btnOpenCodexHud" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/40 border border-amber-400/50 text-amber-200 text-xs font-bold transition cursor-pointer">
+      <button id="btnOpenCodexHud" class="pointer-events-auto badge-nowrap px-2.5 py-1 rounded-none bg-amber-500/20 hover:bg-amber-500/40 border border-amber-400/50 text-amber-200 text-xs font-bold transition cursor-pointer">
         🧬 本局图鉴
       </button>
     </div>
@@ -53,39 +53,39 @@
 
   <!-- 第二栏：生命值、9大基因亲和度实时面板 -->
   <div class="w-full max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
-    <div class="myth-panel px-3 py-1.5 rounded-lg flex items-center gap-3 min-w-[230px]">
+    <div class="myth-panel px-3 py-1.5 rounded-none flex items-center gap-3 min-w-[230px]">
       <div class="text-xs font-bold text-rose-400 badge-nowrap">气血</div>
-      <div class="w-36 h-3.5 bg-slate-950 rounded-full overflow-hidden border border-rose-500/40 relative">
+      <div class="w-36 h-3.5 bg-slate-950 rounded-none overflow-hidden border border-rose-500/40 relative">
         <div id="hpBar" class="h-full bar-hp transition-all duration-150" style="width: 100%"></div>
         <span id="hpText" class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">130 / 130</span>
       </div>
     </div>
 
-    <div id="geneAffinityBar" class="myth-panel px-3 py-1 rounded-lg flex items-center gap-1.5 flex-wrap">
+    <div id="geneAffinityBar" class="myth-panel px-3 py-1 rounded-none flex items-center gap-1.5 flex-wrap">
       <span class="text-[11px] text-amber-300/80 mr-1 font-bold badge-nowrap">基因亲和:</span>
     </div>
   </div>
 
   <!-- 神通试炼快捷抽屉（一键测试所有超武与五阶形态 + 压测） -->
-  <div id="sandboxPanel" class="w-full max-w-6xl mx-auto myth-panel p-2.5 rounded-xl pointer-events-auto hidden flex-wrap items-center justify-between gap-2 border border-purple-400/50">
+  <div id="sandboxPanel" class="w-full max-w-6xl mx-auto myth-panel p-2.5 rounded-none pointer-events-auto hidden flex-wrap items-center justify-between gap-2 border border-purple-400/50">
     <div class="flex items-center gap-2 flex-wrap">
       <span class="text-xs font-bold text-purple-300 badge-nowrap">⚡ 试炼快捷指令：</span>
-      <button id="btnCheatLvUp" class="badge-nowrap px-2.5 py-1 rounded bg-emerald-600/30 hover:bg-emerald-500/50 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer">🔼 立即升1级</button>
-      <button id="btnCheatNextStage" class="badge-nowrap px-2.5 py-1 rounded bg-amber-600/30 hover:bg-amber-500/50 border border-amber-400/50 text-amber-200 text-xs font-bold cursor-pointer">🐉 跃迁下一阶真身</button>
-      <button id="btnCheatUnlockSynergy" class="badge-nowrap px-2.5 py-1 rounded bg-rose-600/30 hover:bg-rose-500/50 border border-rose-400/50 text-rose-200 text-xs font-bold cursor-pointer">🔥 一键觉醒当前超武</button>
-      <button id="btnCheatAllSynergy" class="badge-nowrap px-2.5 py-1 rounded bg-yellow-500/30 hover:bg-yellow-400/50 border border-yellow-300/60 text-yellow-200 text-xs font-bold cursor-pointer">🌟 满配6大超武神装</button>
-      <button id="btnCheatStress" class="badge-nowrap px-2.5 py-1 rounded bg-cyan-600/30 hover:bg-cyan-500/50 border border-cyan-400/50 text-cyan-200 text-xs font-bold cursor-pointer">🐜 压测：生成1500只怪</button>
+      <button id="btnCheatLvUp" class="badge-nowrap px-2.5 py-1 rounded-none bg-emerald-600/30 hover:bg-emerald-500/50 border border-emerald-400/50 text-emerald-200 text-xs font-bold cursor-pointer">🔼 立即升1级</button>
+      <button id="btnCheatNextStage" class="badge-nowrap px-2.5 py-1 rounded-none bg-amber-600/30 hover:bg-amber-500/50 border border-amber-400/50 text-amber-200 text-xs font-bold cursor-pointer">🐉 跃迁下一阶真身</button>
+      <button id="btnCheatUnlockSynergy" class="badge-nowrap px-2.5 py-1 rounded-none bg-rose-600/30 hover:bg-rose-500/50 border border-rose-400/50 text-rose-200 text-xs font-bold cursor-pointer">🔥 一键觉醒当前超武</button>
+      <button id="btnCheatAllSynergy" class="badge-nowrap px-2.5 py-1 rounded-none bg-yellow-500/30 hover:bg-yellow-400/50 border border-yellow-300/60 text-yellow-200 text-xs font-bold cursor-pointer">🌟 满配6大超武神装</button>
+      <button id="btnCheatStress" class="badge-nowrap px-2.5 py-1 rounded-none bg-cyan-600/30 hover:bg-cyan-500/50 border border-cyan-400/50 text-cyan-200 text-xs font-bold cursor-pointer">🐜 压测：生成1500只怪</button>
     </div>
     <span class="text-[11px] text-slate-400 badge-nowrap">提示：渲染管线已 GPU 化，满屏超武与海量单位依然丝滑！</span>
   </div>
 
   <!-- 左下角：当前体内器官与被动基因槽位 -->
   <div class="fixed bottom-3 left-3 flex flex-col gap-1.5 pointer-events-none z-20">
-    <div class="myth-panel p-2 rounded-lg flex items-center gap-1.5" id="activeOrgansHud">
+    <div class="myth-panel p-2 rounded-none flex items-center gap-1.5" id="activeOrgansHud">
       <span class="text-[10px] text-amber-300/80 px-1 border-r border-amber-500/30 badge-nowrap">攻击器官</span>
       <div id="activeSlots" class="flex items-center gap-1.5"></div>
     </div>
-    <div class="myth-panel p-2 rounded-lg flex items-center gap-1.5" id="passiveGenesHud">
+    <div class="myth-panel p-2 rounded-none flex items-center gap-1.5" id="passiveGenesHud">
       <span class="text-[10px] text-cyan-300/80 px-1 border-r border-cyan-500/30 badge-nowrap">突变基因</span>
       <div id="passiveSlots" class="flex items-center gap-1.5"></div>
     </div>
@@ -93,10 +93,10 @@
 </div>
 
 <!-- 操作提示浮层 -->
-<div id="hintToast" class="fixed top-28 left-1/2 -translate-x-1/2 z-50 pointer-events-none hidden myth-panel px-4 py-2 rounded-lg border border-amber-400/60 text-amber-100 text-sm font-bold badge-nowrap"></div>
+<div id="hintToast" class="fixed top-28 left-1/2 -translate-x-1/2 z-50 pointer-events-none hidden myth-panel px-4 py-2 rounded-none border border-amber-400/60 text-amber-100 text-sm font-bold badge-nowrap"></div>
 
 <!-- Boss 警告横幅 --><div id="bossWarning" class="fixed top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none hidden">
-  <div class="myth-panel px-8 py-3 rounded-xl border-2 border-red-500 bg-red-950/90 flex items-center gap-4 animate-bounce">
+  <div class="myth-panel px-8 py-3 rounded-none border-2 border-red-500 bg-red-950/90 flex items-center gap-4 animate-bounce">
     <span class="text-3xl">⚠️</span>
     <div>
       <div class="text-xs text-red-300 tracking-widest font-bold badge-nowrap">洪荒霸主降临 · 吞噬其真血可获海量进化基因</div>
@@ -106,8 +106,8 @@
 </div>
 
 <!-- 封面主菜单 -->
-<div id="startModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-  <div class="myth-panel max-w-4xl w-full rounded-2xl p-6 md:p-10 border-2 border-amber-500/50 flex flex-col items-center text-center relative overflow-hidden">
+<div id="startModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-none p-4">
+  <div class="myth-panel max-w-4xl w-full rounded-none p-6 md:p-10 border-2 border-amber-500/50 flex flex-col items-center text-center relative overflow-hidden">
     <div class="text-xs md:text-sm tracking-[0.35em] text-amber-400/90 font-bold mb-2">SHANHAI DEVOURER · MYTHICAL EVOLUTION</div>
     <h1 class="text-4xl md:text-6xl font-calligraphy title-gold mb-3">
       山海吞噬录：万兽基因谱
@@ -117,16 +117,16 @@
     </p>
 
     <!-- 封面动态异兽预览画布 -->
-    <div class="relative w-full max-w-2xl h-44 md:h-52 rounded-xl bg-slate-950/90 border border-amber-500/30 mb-6 flex items-center justify-center overflow-hidden shadow-inner">
+    <div class="relative w-full max-w-2xl h-44 md:h-52 rounded-none bg-slate-950/90 border border-amber-500/30 mb-6 flex items-center justify-center overflow-hidden shadow-inner">
       <canvas id="heroPreviewCanvas" width="680" height="210" class="w-full h-full"></canvas>
       <div class="absolute bottom-2 right-3 text-[11px] text-amber-300/70">实时骨骼渲染：混沌幼崽 ➔ 疾风魔狼 ➔ 九天雷鹏 ➔ 太古应龙 ➔ 烛龙创世</div>
     </div>
 
     <div class="flex flex-wrap items-center justify-center gap-4">
-      <button id="btnStartGame" class="px-10 py-3.5 rounded-xl btn-gold text-slate-950 font-black text-lg tracking-wider shadow-lg transition transform hover:scale-105 cursor-pointer">
+      <button id="btnStartGame" class="px-10 py-3.5 rounded-none btn-gold text-slate-950 font-black text-lg tracking-wider shadow-lg transition transform hover:scale-105 cursor-pointer">
         🔥 破壳降世 · 开始吞噬
       </button>
-      <button id="btnOpenCodexStart" class="px-6 py-3.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-amber-400/50 text-amber-200 font-bold text-base transition cursor-pointer">
+      <button id="btnOpenCodexStart" class="px-6 py-3.5 rounded-none bg-slate-800/90 hover:bg-slate-700 border border-amber-400/50 text-amber-200 font-bold text-base transition cursor-pointer">
         📜 万兽进化图鉴 & 联动配方
       </button>
     </div>
@@ -134,8 +134,8 @@
 </div>
 
 <!-- 升级：基因与器官三选一弹窗 -->
-<div id="upgradeModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 hidden">
-  <div class="myth-panel max-w-5xl w-full rounded-2xl p-6 md:p-8 border-2 border-amber-500/50 flex flex-col items-center">
+<div id="upgradeModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-5xl w-full rounded-none p-6 md:p-8 border-2 border-amber-500/50 flex flex-col items-center">
     <div class="text-xs tracking-[0.25em] text-emerald-400 font-bold mb-1">GENE MUTATION & ORGAN ASSIMILATION</div>
     <h2 id="upgradeTitle" class="text-3xl md:text-4xl font-calligraphy text-amber-200 mb-1">基因吞噬 · 器官突变</h2>
     <p id="upgradeSubtitle" class="text-xs md:text-sm text-slate-300 mb-6 text-center">选择一项器官或突变基因融入真身（影响下一阶形态进化的基因亲和度）</p>
@@ -145,8 +145,8 @@
 </div>
 
 <!-- 阶段进化：9选3基因匹配真身弹窗 -->
-<div id="evolutionModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
-  <div class="myth-panel max-w-5xl w-full rounded-2xl p-6 md:p-8 border-2 border-amber-400 flex flex-col items-center">
+<div id="evolutionModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/85 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-5xl w-full rounded-none p-6 md:p-8 border-2 border-amber-400 flex flex-col items-center">
     <div class="text-xs tracking-[0.3em] text-amber-400 font-bold mb-1">BLOODLINE AWAKENING · 基因共鸣跃迁</div>
     <h2 id="evoStageTitle" class="text-3xl md:text-5xl font-calligraphy title-gold-h mb-2">
       二阶荒古凶兽 · 血脉觉醒
@@ -160,18 +160,18 @@
 </div>
 
 <!-- 万兽进化图鉴 & 基因联动表 弹窗 -->
-<div id="codexModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
-  <div class="myth-panel max-w-6xl w-full h-[88vh] rounded-2xl p-5 md:p-7 border-2 border-amber-500/50 flex flex-col">
+<div id="codexModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-6xl w-full h-[88vh] rounded-none p-5 md:p-7 border-2 border-amber-500/50 flex flex-col">
     <div class="flex flex-wrap items-center justify-between border-b border-amber-500/30 pb-3 mb-4 gap-2">
       <div>
         <h2 class="text-2xl md:text-3xl font-calligraphy text-amber-300">📜 山海万兽图鉴 & 器官超武共鸣录</h2>
         <p class="text-xs text-slate-400 mt-0.5">本局构筑 · 5大进化阶级（37种真身）· 12组基因联动超武配方</p>
       </div>
       <div class="flex items-center gap-2">
-        <button id="tabBtnBuild" class="badge-nowrap px-4 py-1.5 rounded-lg bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer">🧬 本局基因器官</button>
-        <button id="tabBtnForms" class="badge-nowrap px-4 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer">🐉 37种山海真身</button>
-        <button id="tabBtnSynergies" class="badge-nowrap px-4 py-1.5 rounded-lg bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer">🔥 12组联动超武配方</button>
-        <button id="btnCloseCodex" class="badge-nowrap ml-2 px-3 py-1.5 rounded-lg bg-rose-900/60 hover:bg-rose-700 text-rose-200 border border-rose-500/40 text-xs md:text-sm font-bold cursor-pointer">✕ 关闭</button>
+        <button id="tabBtnBuild" class="badge-nowrap px-4 py-1.5 rounded-none bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer">🧬 本局基因器官</button>
+        <button id="tabBtnForms" class="badge-nowrap px-4 py-1.5 rounded-none bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer">🐉 37种山海真身</button>
+        <button id="tabBtnSynergies" class="badge-nowrap px-4 py-1.5 rounded-none bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer">🔥 12组联动超武配方</button>
+        <button id="btnCloseCodex" class="badge-nowrap ml-2 px-3 py-1.5 rounded-none bg-rose-900/60 hover:bg-rose-700 text-rose-200 border border-rose-500/40 text-xs md:text-sm font-bold cursor-pointer">✕ 关闭</button>
       </div>
     </div>
 
@@ -184,27 +184,27 @@
 </div>
 
 <!-- 暂停菜单 -->
-<div id="pauseModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 hidden">
-  <div class="myth-panel max-w-md w-full rounded-2xl p-7 border-2 border-amber-500/50 flex flex-col items-center">
+<div id="pauseModal" class="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-md w-full rounded-none p-7 border-2 border-amber-500/50 flex flex-col items-center">
     <div class="text-xs tracking-[0.3em] text-amber-400 font-bold mb-1">PAUSED · 洪荒静止</div>
     <h2 class="text-4xl font-calligraphy text-amber-200 mb-1">暂停 · 静观己身</h2>
     <p class="text-[11px] text-slate-400 mb-5">按 ESC 快速暂停 / 继续</p>
 
     <div class="w-full flex flex-col gap-2.5">
-      <button id="btnResume" class="w-full py-3 rounded-xl btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg transition transform hover:scale-[1.02] cursor-pointer">
+      <button id="btnResume" class="w-full py-3 rounded-none btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg transition transform hover:scale-[1.02] cursor-pointer">
         ▶ 继续吞噬
       </button>
-      <button id="btnPauseBuild" class="w-full py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-bold text-sm transition cursor-pointer">
+      <button id="btnPauseBuild" class="w-full py-2.5 rounded-none bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-bold text-sm transition cursor-pointer">
         🧬 本局基因器官图鉴
       </button>
-      <button id="btnPauseCodex" class="w-full py-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-amber-400/40 text-amber-200 font-bold text-sm transition cursor-pointer">
+      <button id="btnPauseCodex" class="w-full py-2.5 rounded-none bg-slate-800/90 hover:bg-slate-700 border border-amber-400/40 text-amber-200 font-bold text-sm transition cursor-pointer">
         📜 万兽进化图鉴 & 超武配方
       </button>
       <div class="flex gap-2.5">
-        <button id="btnPauseRestart" class="flex-1 py-2.5 rounded-xl bg-emerald-900/50 hover:bg-emerald-800/70 border border-emerald-500/40 text-emerald-200 font-bold text-sm transition cursor-pointer">
+        <button id="btnPauseRestart" class="flex-1 py-2.5 rounded-none bg-emerald-900/50 hover:bg-emerald-800/70 border border-emerald-500/40 text-emerald-200 font-bold text-sm transition cursor-pointer">
           🔄 重开本局
         </button>
-        <button id="btnPauseTitle" class="flex-1 py-2.5 rounded-xl bg-rose-900/50 hover:bg-rose-800/70 border border-rose-500/40 text-rose-200 font-bold text-sm transition cursor-pointer">
+        <button id="btnPauseTitle" class="flex-1 py-2.5 rounded-none bg-rose-900/50 hover:bg-rose-800/70 border border-rose-500/40 text-rose-200 font-bold text-sm transition cursor-pointer">
           🏠 返回封面
         </button>
       </div>
@@ -213,13 +213,13 @@
 </div>
 
 <!-- 结算弹窗 -->
-<div id="gameOverModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 hidden">
-  <div class="myth-panel max-w-lg w-full rounded-2xl p-8 border-2 border-amber-500/50 flex flex-col items-center text-center">
+<div id="gameOverModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-none p-4 hidden">
+  <div class="myth-panel max-w-lg w-full rounded-none p-8 border-2 border-amber-500/50 flex flex-col items-center text-center">
     <h2 id="endTitle" class="text-4xl font-calligraphy text-amber-300 mb-2">洪荒陨落 · 身死道消</h2>
     <p id="endSubtitle" class="text-sm text-slate-300 mb-5">你的血肉重归山海大地，等待下一次轮回破壳</p>
-    <canvas id="endFormPreview" width="160" height="160" class="mb-4 rounded-full bg-slate-950/90 border border-amber-500/40"></canvas>
-    <div id="endStats" class="w-full bg-slate-900/80 rounded-xl p-4 border border-amber-500/20 text-sm space-y-2 mb-6"></div>
-    <button id="btnRestart" class="px-8 py-3 rounded-xl btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg hover:scale-105 transition cursor-pointer">
+    <canvas id="endFormPreview" style="width:160px;height:160px" class="mb-4 rounded-none bg-slate-950/90 border border-amber-500/40"></canvas>
+    <div id="endStats" class="w-full bg-slate-900/80 rounded-none p-4 border border-amber-500/20 text-sm space-y-2 mb-6"></div>
+    <button id="btnRestart" class="px-8 py-3 rounded-none btn-gold text-slate-950 font-black text-base tracking-wider shadow-lg hover:scale-105 transition cursor-pointer">
       🔄 重入轮回 · 再次吞噬
     </button>
   </div>

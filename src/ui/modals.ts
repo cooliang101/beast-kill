@@ -51,12 +51,12 @@ export function openUpgradeModal(game: Game): void {
     const isSynergy = item.type === 'synergy';
     const def = item.def;
     const card = document.createElement('div');
-    card.className = `evo-card rounded-xl p-5 flex flex-col justify-between cursor-pointer ${isSynergy ? 'synergy-card' : ''}`;
+    card.className = `evo-card rounded-none p-5 flex flex-col justify-between cursor-pointer ${isSynergy ? 'synergy-card' : ''}`;
 
     const tagBadges = (def.tags || [])
       .map((t) => {
         const gt = GENE_TAGS[t];
-        return `<span class="badge-nowrap px-2.5 py-0.5 rounded text-xs font-bold" style="background:${gt.bg};color:${gt.color};border:1px solid ${gt.color}66">[${gt.name}] 基因</span>`;
+        return `<span class="badge-nowrap px-2.5 py-0.5 rounded-none text-xs font-bold" style="background:${gt.bg};color:${gt.color};border:1px solid ${gt.color}66">[${gt.name}] 基因</span>`;
       })
       .join('');
 
@@ -71,13 +71,13 @@ export function openUpgradeModal(game: Game): void {
     card.innerHTML = `
       <div>
         <div class="flex flex-wrap items-center justify-between gap-2 mb-3.5">
-          <span class="badge-nowrap text-xs font-bold px-2.5 py-1 rounded ${isSynergy ? 'bg-amber-400 text-slate-950' : item.type === 'active' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'}">
+          <span class="badge-nowrap text-xs font-bold px-2.5 py-1 rounded-none ${isSynergy ? 'bg-amber-400 text-slate-950' : item.type === 'active' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'}">
             ${typeLabel}
           </span>
           <div class="flex items-center gap-1.5 flex-wrap">${tagBadges}</div>
         </div>
         <div class="flex items-center gap-3.5 mb-3">
-          <div class="w-14 h-14 rounded-xl bg-slate-950 border border-amber-500/40 p-2.5 shrink-0 shadow-inner">
+          <div class="w-14 h-14 rounded-none bg-slate-950 border border-amber-500/40 p-2.5 shrink-0 shadow-inner">
             ${getOrganSvg(def.id, def.color)}
           </div>
           <div class="min-w-0">
@@ -146,39 +146,39 @@ export function openEvolutionModal(game: Game, targetStage: number): void {
   matched3.forEach((entry, idx) => {
     const f = entry.form;
     const card = document.createElement('div');
-    card.className = 'evo-card rounded-2xl p-5 flex flex-col justify-between cursor-pointer border-2 border-amber-500/40';
+    card.className = 'evo-card rounded-none p-5 flex flex-col justify-between cursor-pointer border-2 border-amber-500/40';
 
     const tagBadges = f.tags
       .map((t) => {
         const gt = GENE_TAGS[t];
-        return `<span class="badge-nowrap px-2 py-0.5 rounded text-xs font-bold" style="background:${gt.bg};color:${gt.color};border:1px solid ${gt.color}66">[${gt.name}]</span>`;
+        return `<span class="badge-nowrap px-2 py-0.5 rounded-none text-xs font-bold" style="background:${gt.bg};color:${gt.color};border:1px solid ${gt.color}66">[${gt.name}]</span>`;
       })
       .join('');
 
     card.innerHTML = `
       <div>
         <div class="flex flex-wrap items-center justify-between gap-1.5 mb-2.5">
-          <span class="badge-nowrap text-xs font-bold px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+          <span class="badge-nowrap text-xs font-bold px-2.5 py-0.5 rounded-none bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
             基因契合度 ${entry.matchPct}%
           </span>
           <div class="flex gap-1 flex-wrap">${tagBadges}</div>
         </div>
-        <div class="w-full h-36 rounded-xl bg-slate-950/90 border border-amber-500/30 mb-3 flex items-center justify-center relative overflow-hidden">
-          <canvas id="evoPreviewCanvas_${idx}" width="220" height="140"></canvas>
+        <div class="w-full h-36 rounded-none bg-slate-950/90 border border-amber-500/30 mb-3 flex items-center justify-center relative overflow-hidden">
+          <canvas id="evoPreviewCanvas_${idx}" style="width:132px;height:132px"></canvas>
         </div>
         <div class="text-xs text-amber-400/80 font-bold">${f.title}</div>
         <h3 class="text-2xl font-calligraphy text-amber-200 mb-2">${f.name}</h3>
-        <div class="bg-slate-900/90 rounded-lg p-2.5 border border-amber-500/20 mb-3 text-xs">
+        <div class="bg-slate-900/90 rounded-none p-2.5 border border-amber-500/20 mb-3 text-xs">
           <div class="text-amber-300 font-bold mb-0.5">✨ 本命神通：【${f.skillName}】</div>
           <div class="text-slate-300 leading-relaxed">${f.skillDesc}</div>
         </div>
         <div class="grid grid-cols-3 gap-1.5 text-[11px] text-center">
-          <div class="badge-nowrap bg-slate-900/70 py-1 rounded border border-rose-500/20 text-rose-300">气血 ${f.stats.hp}</div>
-          <div class="badge-nowrap bg-slate-900/70 py-1 rounded border border-amber-500/20 text-amber-300">战力 ×${f.stats.dmgMult}</div>
-          <div class="badge-nowrap bg-slate-900/70 py-1 rounded border border-cyan-500/20 text-cyan-300">护甲 ${f.stats.armor}</div>
+          <div class="badge-nowrap bg-slate-900/70 py-1 rounded-none border border-rose-500/20 text-rose-300">气血 ${f.stats.hp}</div>
+          <div class="badge-nowrap bg-slate-900/70 py-1 rounded-none border border-amber-500/20 text-amber-300">战力 ×${f.stats.dmgMult}</div>
+          <div class="badge-nowrap bg-slate-900/70 py-1 rounded-none border border-cyan-500/20 text-cyan-300">护甲 ${f.stats.armor}</div>
         </div>
       </div>
-      <button class="mt-4 w-full py-2.5 rounded-xl btn-gold text-slate-950 font-black text-sm tracking-wider cursor-pointer">
+      <button class="mt-4 w-full py-2.5 rounded-none btn-gold text-slate-950 font-black text-sm tracking-wider cursor-pointer">
         🔥 蜕变进化为【${f.name}】
       </button>
     `;
@@ -254,8 +254,8 @@ export function isCodexOpen(): boolean {
 }
 
 export function switchCodexTab(tab: CodexTab): void {
-  const activeCls = 'badge-nowrap px-4 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer';
-  const idleCls = 'badge-nowrap px-4 py-1.5 rounded-lg bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer';
+  const activeCls = 'badge-nowrap px-4 py-1.5 rounded-none bg-amber-500 text-slate-950 font-bold text-xs md:text-sm cursor-pointer';
+  const idleCls = 'badge-nowrap px-4 py-1.5 rounded-none bg-slate-800 text-amber-200 border border-amber-500/40 font-bold text-xs md:text-sm cursor-pointer';
   (Object.keys(CODEX_TAB_BTN) as CodexTab[]).forEach((t) => {
     const isActive = t === tab;
     const btn = byIdOpt(CODEX_TAB_BTN[t]);
@@ -333,12 +333,12 @@ function renderCodex(): void {
 
     list.forEach((f) => {
       const tagsHtml = f.tags
-        .map((t) => `<span class="badge-nowrap px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:${GENE_TAGS[t].bg};color:${GENE_TAGS[t].color}">[${GENE_TAGS[t].name}]</span>`)
+        .map((t) => `<span class="badge-nowrap px-1.5 py-0.5 rounded-none text-[10px] font-bold" style="background:${GENE_TAGS[t].bg};color:${GENE_TAGS[t].color}">[${GENE_TAGS[t].name}]</span>`)
         .join('');
       const card = document.createElement('div');
-      card.className = 'bg-slate-900/90 border border-amber-500/25 rounded-xl p-3 flex items-center gap-3';
+      card.className = 'bg-slate-900/90 border border-amber-500/25 rounded-none p-3 flex items-center gap-3';
       card.innerHTML = `
-        <canvas id="codex_cvs_${f.id}" width="92" height="92" class="w-20 h-20 rounded-lg bg-slate-950 border border-amber-500/20 shrink-0"></canvas>
+        <canvas id="codex_cvs_${f.id}" width="92" height="92" class="w-20 h-20 rounded-none bg-slate-950 border border-amber-500/20 shrink-0"></canvas>
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-1">
             <span class="font-bold text-amber-200 text-base truncate">${f.name}</span>
@@ -365,11 +365,11 @@ function renderCodex(): void {
   ACTIVE_ORGANS.forEach((act) => {
     const pas = PASSIVE_GENES.find((p) => p.id === act.pairPassive);
     const div = document.createElement('div');
-    div.className = 'bg-slate-900/90 border border-amber-500/35 rounded-xl p-4 flex flex-col justify-between';
+    div.className = 'bg-slate-900/90 border border-amber-500/35 rounded-none p-4 flex flex-col justify-between';
     div.innerHTML = `
       <div>
         <div class="text-xs font-bold text-amber-400 mb-2">🔥 基因联动超武配方</div>
-        <div class="flex items-center gap-2 mb-3 bg-slate-950/90 p-2.5 rounded-lg border border-amber-500/20 flex-wrap">
+        <div class="flex items-center gap-2 mb-3 bg-slate-950/90 p-2.5 rounded-none border border-amber-500/20 flex-wrap">
           <span class="badge-nowrap text-xs font-bold text-amber-200">${act.name} (Lv.5)</span>
           <span class="text-amber-400 font-bold">+</span>
           <span class="badge-nowrap text-xs font-bold text-cyan-300">${pas ? pas.name : ''} (Lv.1+)</span>

@@ -1,21 +1,37 @@
-// PixiJS 渲染场景（原 renderGame 的 GPU 化移植）。
+// PixiJS 渲染场景（像素风版）。
 //
 // 分层结构（app.stage 下）：
-//   terrainTiling（屏幕固定网格）→ worldLayer（相机平移）
+//   terrainTiling（屏幕固定像素网格）→ worldLayer（相机平移）
 //     ├ mapRing / zone / gem / enemy / player 层
 //     ├ fx 精灵层 + fx Graphics 层（ADD 混合，替代原 lighter 块）
 //     └ 飘字层
 //   joystickGfx（屏幕固定）
 //
-// 性能设计：
-// - 高频实体（小怪/血条/经验球/投射物/粒子/月牙）全部精灵池化，稳态零新建；
-// - 低频特效（天雷/激光/触须/流星/龙卷/法阵动画）用 Graphics 池，数量有界；
-// - 玩家本命真身每帧绘制到 320² 离屏 Canvas 后上传纹理（1 个实体，保真骨骼动画）。
+// 像素化要点：
+// - 全部贴图为低分辨率艺术像素，最近邻采样放大（关闭抗锯齿）；
+// - 精灵位置取整，避免贴图落在半像素上产生糊边/颤动；
+// - Graphics 特效（天雷/激光/触须/流星/龙卷/法阵）坐标量化到 TEXEL 网格，方头线帽；
+// - 玩家本命真身按艺术像素分辨率绘制到小 Canvas 后上传（1 个实体，保真像素动画）。
 
 import { Application, CanvasSource, Container, Graphics, Sprite, Text, Texture, TilingSprite } from 'pixi.js';
-import { bakeTextures, PROJECTILE_TEX_BASE_R, SLASH_ARC_BASE_R, ZONE_TEX_BASE_R } from './textures';
+import {
+  bakeTextures,
+  BOSS_RING_TEXEL_R,
+  BOSS_RING_WORLD_R,
+  GEM_TEXEL_R,
+  ICE_SWORD_K,
+  MAP_RING_TEXEL_R,
+  PARTICLE_SCALE,
+  PROJ_TEXEL_EXTENT,
+  SHURIKEN_K,
+  SLASH_ARC_TEXEL_R,
+  SPIKE_TEXEL_EXTENT,
+  SPIKE_WORLD_EXTENT,
+  WISP_TEXEL_R,
+} from './textures';
 import type { BakedTextures } from './textures';
 import { drawMythicalBeast } from './painter';
+import { texelRadius, TEXEL } from './pixel';
 import { createMapFeatures } from '../game/world';
 import type { MapFeature } from '../game/world';
 import type { GameState, World } from '../game/types';
@@ -23,7 +39,21 @@ import type { Input } from '../core/input';
 
 const WALK_FRAME_STEP = (Math.PI * 2) / 8;
 const GRID_SIZE = 180;
-const PLAYER_CANVAS = 320;
+
+/** 量化到艺术像素网格（像素风特效的关键） */
+const q = (v: number): number => Math.round(v / TEXEL) * TEXEL;
+
+/** 用 Graphics 画一个量化半径的像素多边形（近圆），比真圆更有像素感 */
+function steppedCirclePath(g: Graphics, cx: number, cy: number, r: number, segments = 16): void {
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    const x = q(cx + Math.cos(a) * r);
+    const y = q(cy + Math.sin(a) * r);
+    if (i === 0) g.moveTo(x, y);
+    else g.lineTo(x, y);
+  }
+  g.closePath();
+}
 
 /** 精灵池：begin → acquire（重置默认态）→ end（隐藏未用） */
 class SpritePool {
@@ -114,7 +144,7 @@ class TextPool {
           fontSize: 12,
           fontWeight: '900',
           fill: '#ffffff',
-          stroke: { color: '#000000', width: 2.5 },
+          stroke: { color: '#000000', width: 3, join: 'round' },
         },
       });
       t.anchor.set(0.5);
@@ -140,7 +170,7 @@ export class GameScene {
   private worldLayer = new Container();
 
   private mapRingPool!: SpritePool;
-  private zoneSpritePool!: SpritePool;
+  private zonePool!: GraphicsPool;
   private gemPool!: SpritePool;
   private enemyPool!: SpritePool;
   private hpBgPool!: SpritePool;
@@ -152,7 +182,6 @@ export class GameScene {
   private slashPool!: SpritePool;
   private particlePool!: SpritePool;
 
-  private zoneGfxPool!: GraphicsPool;
   private boltPool!: GraphicsPool;
   private beamPool!: GraphicsPool;
   private tentaclePool!: GraphicsPool;
@@ -168,16 +197,18 @@ export class GameScene {
   private playerCtx!: CanvasRenderingContext2D;
   private playerSource!: CanvasSource;
   private playerSprite!: Sprite;
+  private playerTexelR = 0;
 
   /** 供输入系统绑定指针事件 */
   get canvasElement(): HTMLCanvasElement {
     return this.app.canvas as HTMLCanvasElement;
   }
 
-  async init(host: HTMLElement): Promise<void> {    this.app = new Application();
+  async init(host: HTMLElement): Promise<void> {
+    this.app = new Application();
     await this.app.init({
       background: '#06060f',
-      antialias: true,
+      antialias: false, // 像素风必须关闭抗锯齿
       preference: 'webgl',
       resolution: 1,
       autoDensity: true,
@@ -187,12 +218,13 @@ export class GameScene {
 
     this.textures = bakeTextures();
 
-    // ---- 地形网格（TilingSprite 替代每帧重绘网格线） ----
+    // ---- 地形网格（像素网格贴图 + tileScale = TEXEL） ----
     this.terrain = new TilingSprite({
       texture: this.textures.gridCell,
       width: window.innerWidth,
       height: window.innerHeight,
     });
+    this.terrain.tileScale.set(TEXEL);
     this.app.stage.addChild(this.terrain);
 
     // ---- 世界层 ----
@@ -206,9 +238,8 @@ export class GameScene {
     const textLayer = new Container();
     this.worldLayer.addChild(mapRingLayer, zoneLayer, gemLayer, enemyLayer, fxSpriteLayer, fxGfxLayer, textLayer);
 
-    // 精灵池
     this.mapRingPool = new SpritePool(mapRingLayer);
-    this.zoneSpritePool = new SpritePool(zoneLayer);
+    this.zonePool = new GraphicsPool(zoneLayer);
     this.gemPool = new SpritePool(gemLayer);
     this.enemyPool = new SpritePool(enemyLayer);
     this.hpBgPool = new SpritePool(enemyLayer);
@@ -220,8 +251,6 @@ export class GameScene {
     this.slashPool = new SpritePool(fxSpriteLayer);
     this.particlePool = new SpritePool(fxSpriteLayer);
 
-    // Graphics 池
-    this.zoneGfxPool = new GraphicsPool(zoneLayer);
     this.boltPool = new GraphicsPool(fxGfxLayer);
     this.beamPool = new GraphicsPool(fxGfxLayer);
     this.tentaclePool = new GraphicsPool(fxGfxLayer);
@@ -230,21 +259,18 @@ export class GameScene {
     this.trailPool = new GraphicsPool(fxGfxLayer);
     this.textPool = new TextPool(textLayer);
 
-    // 基因球牵引线：全局单 Graphics
     this.gemLineGfx = new Graphics();
     gemLayer.addChild(this.gemLineGfx);
 
-    // 玩家（离屏 Canvas → 纹理，每帧重绘上传）
+    // 玩家（艺术像素分辨率小 Canvas → 纹理，每帧重绘上传）
     this.playerCanvas = document.createElement('canvas');
-    this.playerCanvas.width = PLAYER_CANVAS;
-    this.playerCanvas.height = PLAYER_CANVAS;
     this.playerCtx = this.playerCanvas.getContext('2d')!;
     this.playerSource = new CanvasSource({ resource: this.playerCanvas });
+    this.playerSource.scaleMode = 'nearest';
     this.playerSprite = new Sprite(new Texture({ source: this.playerSource }));
     this.playerSprite.anchor.set(0.5);
     enemyLayer.addChild(this.playerSprite);
 
-    // 虚拟摇杆（屏幕坐标层）
     this.joystickGfx = new Graphics();
     this.app.stage.addChild(this.joystickGfx);
   }
@@ -257,18 +283,16 @@ export class GameScene {
     const h = renderer.height;
     const player = world.player;
 
-    // ---- 相机与震屏 ----
-    const shakeX = world.shake > 0 ? (Math.random() - 0.5) * world.shake : 0;
-    const shakeY = world.shake > 0 ? (Math.random() - 0.5) * world.shake : 0;
-    const camX = w / 2 - player.x + shakeX;
-    const camY = h / 2 - player.y + shakeY;
+    // ---- 相机与震屏（震动取整，像素风里不做亚像素抖动） ----
+    const shakeX = world.shake > 0 ? Math.round((Math.random() - 0.5) * world.shake) : 0;
+    const shakeY = world.shake > 0 ? Math.round((Math.random() - 0.5) * world.shake) : 0;
+    const camX = Math.round(w / 2 - player.x) + shakeX;
+    const camY = Math.round(h / 2 - player.y) + shakeY;
     this.worldLayer.position.set(camX, camY);
     this.terrain.tilePosition.set(((camX % GRID_SIZE) + GRID_SIZE) % GRID_SIZE, ((camY % GRID_SIZE) + GRID_SIZE) % GRID_SIZE);
 
-    // ---- 池 begin ----
     this.mapRingPool.begin();
-    this.zoneSpritePool.begin();
-    this.zoneGfxPool.begin();
+    this.zonePool.begin();
     this.gemPool.begin();
     this.enemyPool.begin();
     this.hpBgPool.begin();
@@ -296,10 +320,8 @@ export class GameScene {
     this.renderTexts(world);
     this.renderJoystick(state, input);
 
-    // ---- 池 end ----
     this.mapRingPool.end();
-    this.zoneSpritePool.end();
-    this.zoneGfxPool.end();
+    this.zonePool.end();
     this.gemPool.end();
     this.enemyPool.end();
     this.hpBgPool.end();
@@ -327,75 +349,113 @@ export class GameScene {
       const s = this.mapRingPool.acquire();
       s.texture = this.textures.mapRing;
       s.tint = f.color;
-      s.alpha = 0.1;
-      s.position.set(f.x, f.y);
-      s.scale.set(f.r / 28);
+      s.alpha = 0.12;
+      s.position.set(Math.round(f.x), Math.round(f.y));
+      s.scale.set(f.r / MAP_RING_TEXEL_R);
     }
   }
 
-  // ---------------------------------------------------------------- 法阵
+  // ---------------------------------------------------------------- 法阵（量化 Graphics）
 
   private renderZones(world: World): void {
     for (const z of world.zones) {
-      const alpha = Math.min(0.75, (z.life / (z.maxLife || 1)) * 0.85);
+      const alpha = Math.min(0.8, (z.life / (z.maxLife || 1)) * 0.9);
+      const g = this.zonePool.acquire();
+      g.position.set(0, 0);
+      g.alpha = alpha;
 
-      if (z.type === 'poison_web') {
-        const s = this.zoneSpritePool.acquire();
-        s.texture = this.textures.poisonWeb;
-        s.tint = z.color;
-        s.position.set(z.x, z.y);
-        s.rotation = z.rot;
-        s.scale.set(z.r / ZONE_TEX_BASE_R);
-        s.alpha = alpha;
-      } else if (z.type === 'ice_sigil') {
-        const s = this.zoneSpritePool.acquire();
-        s.texture = this.textures.iceSigil;
-        s.position.set(z.x, z.y);
-        s.rotation = z.rot + world.time * 0.8;
-        s.scale.set(z.r / ZONE_TEX_BASE_R);
-        s.alpha = alpha;
-      } else {
-        const g = this.zoneGfxPool.acquire();
-        g.position.set(z.x, z.y);
-        g.alpha = alpha;
+      switch (z.type) {
+        case 'poison_web': {
+          // 八角剧毒蛛网：量化多边形填充 + 放射线 + 三层折线环
+          steppedCirclePath(g, z.x, z.y, z.r, 16);
+          g.fill({ color: z.color, alpha: 0.13 });
+          for (let w = 0; w < 8; w++) {
+            const a = (w * Math.PI) / 4 + z.rot;
+            g.moveTo(q(z.x), q(z.y)).lineTo(q(z.x + Math.cos(a) * z.r), q(z.y + Math.sin(a) * z.r));
+          }
+          g.stroke({ width: TEXEL, color: z.color });
+          for (const ring of [0.4, 0.7, 1.0]) {
+            steppedCirclePath(g, z.x, z.y, z.r * ring, 16);
+            g.stroke({ width: TEXEL, color: z.color });
+          }
+          break;
+        }
 
-        if (z.type === 'rock_spikes') {
+        case 'ice_sigil': {
+          // 六角雪花冰晶：旋转的像素射线
+          const spin = z.rot + world.time * 0.8;
+          for (let k = 0; k < 6; k++) {
+            const a = (k * Math.PI) / 3 + spin;
+            const ex = q(z.x + Math.cos(a) * z.r);
+            const ey = q(z.y + Math.sin(a) * z.r);
+            g.moveTo(q(z.x), q(z.y)).lineTo(ex, ey);
+            const mx = z.x + Math.cos(a) * z.r * 0.65;
+            const my = z.y + Math.sin(a) * z.r * 0.65;
+            g.moveTo(q(mx), q(my)).lineTo(q(mx + Math.cos(a + 0.6) * z.r * 0.28), q(my + Math.sin(a + 0.6) * z.r * 0.28));
+            g.moveTo(q(mx), q(my)).lineTo(q(mx + Math.cos(a - 0.6) * z.r * 0.28), q(my + Math.sin(a - 0.6) * z.r * 0.28));
+          }
+          g.stroke({ width: TEXEL, color: 0x7dd3fc });
+          break;
+        }
+
+        case 'rock_spikes': {
           const spikeCount = 12;
           for (let k = 0; k < spikeCount; k++) {
             const a = (k * Math.PI * 2) / spikeCount + z.rot;
             const dist = z.r * (0.45 + (k % 3) * 0.22);
-            const sx = Math.cos(a) * dist;
-            const sy = Math.sin(a) * dist;
-            g.moveTo(sx + Math.cos(a) * 26, sy + Math.sin(a) * 26);
-            g.lineTo(sx + Math.cos(a + 1.5) * 9, sy + Math.sin(a + 1.5) * 9);
-            g.lineTo(sx + Math.cos(a - 1.5) * 9, sy + Math.sin(a - 1.5) * 9);
+            const sx = z.x + Math.cos(a) * dist;
+            const sy = z.y + Math.sin(a) * dist;
+            g.moveTo(q(sx + Math.cos(a) * 26), q(sy + Math.sin(a) * 26));
+            g.lineTo(q(sx + Math.cos(a + 1.5) * 9), q(sy + Math.sin(a + 1.5) * 9));
+            g.lineTo(q(sx + Math.cos(a - 1.5) * 9), q(sy + Math.sin(a - 1.5) * 9));
             g.closePath();
           }
-          g.fill({ color: 0xd6d3d1 });
-          g.stroke({ width: 1.5, color: 0xfbbf24 });
-        } else if (z.type === 'sonic_bagua') {
+          g.fill({ color: 0xd6d3d1 }).stroke({ width: 1.5, color: 0xfbbf24 });
+          break;
+        }
+
+        case 'sonic_bagua': {
           const progress = 1 - z.life / z.maxLife;
           const curR = z.r * (0.3 + progress * 0.7);
           for (let k = 0; k <= 36; k++) {
             const a = (k * Math.PI * 2) / 36;
             const waveR = curR + Math.sin(a * 8 + world.time * 15) * 10;
-            const px = Math.cos(a) * waveR;
-            const py = Math.sin(a) * waveR;
-            if (k === 0) g.moveTo(px, py);
-            else g.lineTo(px, py);
+            const x = q(z.x + Math.cos(a) * waveR);
+            const y = q(z.y + Math.sin(a) * waveR);
+            if (k === 0) g.moveTo(x, y);
+            else g.lineTo(x, y);
           }
           g.closePath();
-          g.stroke({ width: 3.5, color: 0xf43f5e });
-        } else if (z.type === 'blackhole') {
-          g.circle(0, 0, z.r * 0.45).fill({ color: 0x05020a });
+          g.stroke({ width: TEXEL + 1, color: 0xf43f5e });
+          break;
+        }
+
+        case 'blackhole': {
+          steppedCirclePath(g, z.x, z.y, z.r * 0.45, 12);
+          g.fill({ color: 0x05020a });
+          // 四条量化螺旋臂
           for (let arm = 0; arm < 4; arm++) {
             const theta = world.time * 3 + (arm + 1) * (Math.PI / 2);
-            g.arc(Math.cos(theta) * z.r * 0.25, Math.sin(theta) * z.r * 0.25, z.r * 0.55, theta, theta + Math.PI * 1.1);
+            const segs = 8;
+            for (let i = 0; i <= segs; i++) {
+              const t = i / segs;
+              const rr = z.r * 0.55 * t;
+              const a = theta + t * 1.6;
+              const x = q(z.x + Math.cos(a) * rr);
+              const y = q(z.y + Math.sin(a) * rr);
+              if (i === 0) g.moveTo(x, y);
+              else g.lineTo(x, y);
+            }
           }
-          g.stroke({ width: 2.5, color: 0xc084fc });
-        } else {
-          // magma_crater
-          g.circle(0, 0, z.r).fill({ color: z.color, alpha: 0.2 }).stroke({ width: 2, color: z.color });
+          g.stroke({ width: TEXEL, color: 0xc084fc });
+          break;
+        }
+
+        default: {
+          // 熔岩火坑
+          steppedCirclePath(g, z.x, z.y, z.r, 20);
+          g.fill({ color: z.color, alpha: 0.22 }).stroke({ width: TEXEL, color: z.color });
+          break;
         }
       }
     }
@@ -411,13 +471,16 @@ export class GameScene {
     for (const g of world.gems) {
       if (Math.abs(g.x - player.x) > w * 0.6 || Math.abs(g.y - player.y) > h * 0.6) continue;
       if (g.beingPulled) {
-        lines.moveTo(g.x, g.y).lineTo(player.x, player.y).stroke({ width: 1.2, color: g.color, alpha: 0.4 });
+        lines
+          .moveTo(q(g.x), q(g.y))
+          .lineTo(q(player.x), q(player.y))
+          .stroke({ width: TEXEL, color: g.color, alpha: 0.45, cap: 'butt' });
       }
       const s = this.gemPool.acquire();
-      s.texture = this.textures.softDot;
+      s.texture = this.textures.gem;
       s.tint = g.color;
-      s.position.set(g.x, g.y);
-      s.scale.set(g.r / 8);
+      s.position.set(Math.round(g.x), Math.round(g.y));
+      s.scale.set(g.r / GEM_TEXEL_R);
     }
   }
 
@@ -433,34 +496,38 @@ export class GameScene {
 
       const s = this.enemyPool.acquire();
       s.texture = e.hurtTimer > 0 ? set.white : frame;
-      s.position.set(e.x, e.y);
+      s.position.set(Math.round(e.x), Math.round(e.y));
       s.rotation = e.angle;
-      const scale = e.radius / set.radius;
-      s.scale.set(scale);
+      s.scale.set(e.radius / set.texelR);
 
       if (e.isBoss) {
         const ring = this.bossRingPool.acquire();
         ring.texture = this.textures.bossRing;
-        ring.position.set(e.x, e.y);
-        ring.scale.set(e.radius / 44);
+        ring.position.set(Math.round(e.x), Math.round(e.y));
+        ring.scale.set(BOSS_RING_WORLD_R / BOSS_RING_TEXEL_R);
       }
 
       if (e.isBoss || e.hp < e.maxHp) {
-        const bw = e.isBoss ? e.radius * 2.2 : e.radius * 1.5;
-        const bh = e.isBoss ? 6 : 3.5;
+        // 像素血条：固定整数尺寸 + 1 像素黑描边
+        const bw = e.isBoss ? 120 : 48;
+        const bh = e.isBoss ? 12 : 6;
+        const bx = Math.round(e.x - bw / 2);
+        const by = Math.round(e.y - e.radius - (e.isBoss ? 20 : 14));
+
         const bg = this.hpBgPool.acquire();
         bg.texture = Texture.WHITE;
         bg.anchor.set(0, 0);
-        bg.position.set(e.x - bw / 2, e.y - e.radius - 12);
-        bg.scale.set(bw / 16, bh / 16);
+        bg.position.set(bx - TEXEL, by - TEXEL);
+        bg.scale.set((bw + TEXEL * 2) / 16, (bh + TEXEL * 2) / 16);
         bg.tint = 0x000000;
-        bg.alpha = 0.7;
+        bg.alpha = 0.85;
 
         const fg = this.hpFgPool.acquire();
         fg.texture = Texture.WHITE;
         fg.anchor.set(0, 0);
-        fg.position.set(e.x - bw / 2, e.y - e.radius - 12);
-        fg.scale.set((bw * Math.max(0, e.hp / e.maxHp)) / 16, bh / 16);
+        fg.position.set(bx, by);
+        const ratio = Math.max(0, e.hp / e.maxHp);
+        fg.scale.set((bw * ratio) / 16, bh / 16);
         fg.tint = e.isBoss ? 0xf43f5e : 0xfb923c;
       }
     }
@@ -470,13 +537,25 @@ export class GameScene {
 
   private renderPlayer(world: World): void {
     const player = world.player;
+    const rT = texelRadius(player.radius);
+
+    // 尺寸/艺术分辨率变化时重建画布（只在升阶/体型变化时发生）
+    if (rT !== this.playerTexelR) {
+      this.playerTexelR = rT;
+      const size = rT * 2 + PAD_PLAYER * 2;
+      this.playerCanvas.width = size;
+      this.playerCanvas.height = size;
+      this.playerSource.resize(size, size, 1);
+      this.playerSprite.scale.set(player.radius / rT);
+    }
+
     const ctx = this.playerCtx;
-    const c = PLAYER_CANVAS / 2;
-    ctx.clearRect(0, 0, PLAYER_CANVAS, PLAYER_CANVAS);
-    drawMythicalBeast(ctx, player.form, c, c, player.radius, 0, player.walkPhase, player.hurtTimer);
+    const c = this.playerCanvas.width / 2;
+    ctx.clearRect(0, 0, this.playerCanvas.width, this.playerCanvas.height);
+    drawMythicalBeast(ctx, player.form, c, c, rT, 0, player.walkPhase, player.hurtTimer);
     this.playerSource.update();
 
-    this.playerSprite.position.set(player.x, player.y);
+    this.playerSprite.position.set(Math.round(player.x), Math.round(player.y));
     this.playerSprite.rotation = player.angle;
   }
 
@@ -485,27 +564,31 @@ export class GameScene {
   private renderFx(world: World): void {
     const textures = this.textures;
 
-    // 环绕骨剑与丝带残影
+    // 环绕骨剑与像素残影
+    const spikeScale = SPIKE_WORLD_EXTENT / SPIKE_TEXEL_EXTENT;
     for (const sp of world.spikes) {
       if (sp.trail.length > 1) {
         const g = this.trailPool.acquire();
         g.blendMode = 'add';
         for (let t = 0; t < sp.trail.length; t++) {
-          if (t === 0) g.moveTo(sp.trail[t].x, sp.trail[t].y);
-          else g.lineTo(sp.trail[t].x, sp.trail[t].y);
+          const x = q(sp.trail[t].x);
+          const y = q(sp.trail[t].y);
+          if (t === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
         }
         g.stroke({
-          width: sp.evolved ? 8 : 5,
+          width: sp.evolved ? TEXEL * 3 : TEXEL * 2,
           color: sp.evolved ? 0xfbbf24 : 0xd6d3d1,
           alpha: sp.evolved ? 0.45 : 0.35,
-          cap: 'round',
+          cap: 'butt',
         });
       }
       const s = this.spikePool.acquire();
       s.blendMode = 'add';
       s.texture = sp.evolved ? textures.spikeEvolved : textures.spikeNormal;
-      s.position.set(sp.x, sp.y);
+      s.position.set(Math.round(sp.x), Math.round(sp.y));
       s.rotation = sp.angle;
+      s.scale.set(spikeScale);
     }
 
     // 投射物
@@ -514,45 +597,47 @@ export class GameScene {
         const g = this.trailPool.acquire();
         g.blendMode = 'add';
         for (let t = 0; t < p.trail.length; t++) {
-          if (t === 0) g.moveTo(p.trail[t].x, p.trail[t].y);
-          else g.lineTo(p.trail[t].x, p.trail[t].y);
+          const x = q(p.trail[t].x);
+          const y = q(p.trail[t].y);
+          if (t === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
         }
-        g.stroke({ width: p.r * 0.9, color: p.color, alpha: 0.4, cap: 'round' });
+        g.stroke({ width: TEXEL, color: p.color, alpha: 0.4, cap: 'butt' });
       }
 
       const s = this.projPool.acquire();
       s.blendMode = 'add';
-      s.position.set(p.x, p.y);
+      s.position.set(Math.round(p.x), Math.round(p.y));
       if (p.style === 'ice_sword') {
         s.texture = textures.iceSword;
         s.rotation = Math.atan2(p.vy, p.vx);
-        s.scale.set(p.r / PROJECTILE_TEX_BASE_R);
+        s.scale.set((ICE_SWORD_K * p.r) / PROJ_TEXEL_EXTENT);
       } else if (p.style === 'wind_shuriken') {
         s.texture = textures.shuriken;
         s.tint = p.color;
         s.rotation = p.rot;
-        s.scale.set(p.r / PROJECTILE_TEX_BASE_R);
+        s.scale.set((SHURIKEN_K * p.r) / PROJ_TEXEL_EXTENT);
       } else {
         s.texture = textures.wispOuter;
         s.tint = p.color;
-        s.scale.set(p.r / 12);
+        s.scale.set(p.r / WISP_TEXEL_R);
         const core = this.projCorePool.acquire();
         core.blendMode = 'add';
         core.texture = textures.wispCore;
-        core.position.set(p.x, p.y);
-        core.scale.set((p.r * 0.45) / 5);
+        core.position.set(Math.round(p.x), Math.round(p.y));
+        core.scale.set(p.r * 0.45);
       }
     }
 
     // 爪击月牙（外层着色 + 白色高光芯）
     for (const sl of world.slashes) {
       const alpha = sl.life / sl.maxLife;
-      const scale = sl.radius / SLASH_ARC_BASE_R;
+      const scale = sl.radius / SLASH_ARC_TEXEL_R;
       const arc = this.slashPool.acquire();
       arc.blendMode = 'add';
       arc.texture = textures.slashArc;
       arc.tint = sl.color;
-      arc.position.set(sl.x, sl.y);
+      arc.position.set(Math.round(sl.x), Math.round(sl.y));
       arc.rotation = sl.angle;
       arc.scale.set(scale);
       arc.alpha = alpha;
@@ -560,108 +645,120 @@ export class GameScene {
       const core = this.slashPool.acquire();
       core.blendMode = 'add';
       core.texture = textures.slashCore;
-      core.position.set(sl.x, sl.y);
+      core.position.set(Math.round(sl.x), Math.round(sl.y));
       core.rotation = sl.angle;
       core.scale.set(scale);
       core.alpha = alpha;
     }
 
-    // 受击火花粒子
+    // 受击火花粒子（像素块）
     for (const pt of world.particles) {
       const s = this.particlePool.acquire();
       s.blendMode = 'add';
-      s.texture = textures.softDot;
+      s.texture = textures.particle;
       s.tint = pt.color;
-      s.position.set(pt.x, pt.y);
-      s.scale.set(pt.r / 8);
+      s.position.set(Math.round(pt.x), Math.round(pt.y));
+      s.scale.set(pt.r * PARTICLE_SCALE * 0.6);
       s.alpha = pt.life / pt.maxLife;
     }
 
-    // 分形天雷
+    // 分形天雷（顶点量化 + 方头线帽）
     for (const l of world.bolts) {
       const g = this.boltPool.acquire();
       g.blendMode = 'add';
       g.alpha = l.life / l.maxLife;
-      const drawPath = (pts: typeof l.pts): void => {
+      const tracePath = (pts: typeof l.pts): void => {
         for (let i = 0; i < pts.length; i++) {
-          if (i === 0) g.moveTo(pts[i].x, pts[i].y);
-          else g.lineTo(pts[i].x, pts[i].y);
+          const x = q(pts[i].x);
+          const y = q(pts[i].y);
+          if (i === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
         }
       };
-      drawPath(l.pts);
-      g.stroke({ width: l.isEvolved ? 9 : 6, color: l.color, cap: 'round', join: 'round' });
-      drawPath(l.pts);
-      g.stroke({ width: 2.2, color: 0xffffff });
+      tracePath(l.pts);
+      g.stroke({ width: l.isEvolved ? TEXEL * 3 : TEXEL * 2, color: l.color, cap: 'butt', join: 'miter' });
+      tracePath(l.pts);
+      g.stroke({ width: TEXEL, color: 0xffffff, cap: 'butt' });
       if (l.branchPts.length > 0) {
-        drawPath(l.branchPts);
-        g.stroke({ width: 2, color: l.color });
+        tracePath(l.branchPts);
+        g.stroke({ width: TEXEL, color: l.color, cap: 'butt' });
       }
       if (l.hasTarget) {
-        g.circle(l.targetX, l.targetY, l.isEvolved ? 34 : 20).stroke({ width: 2, color: l.color });
+        steppedCirclePath(g, l.targetX, l.targetY, l.isEvolved ? 34 : 20, 10);
+        g.stroke({ width: TEXEL, color: l.color });
       }
     }
 
-    // 妖瞳激光
+    // 妖瞳激光（矩形光束 + 白色方芯 + 像素螺旋）
     for (const b of world.beams) {
       const g = this.beamPool.acquire();
       g.blendMode = 'add';
       g.alpha = b.life / b.maxLife;
-      g.position.set(b.x1, b.y1);
+      g.position.set(q(b.x1), q(b.y1));
       g.rotation = b.angle;
-      g.moveTo(0, 0).lineTo(b.length, 0).stroke({ width: b.width * 2.2, color: b.color, cap: 'round' });
-      g.moveTo(0, 0).lineTo(b.length, 0).stroke({ width: b.width * 0.75, color: 0xffffff });
-      for (let d = 0; d < b.length; d += 18) {
-        const wy = Math.sin(d * 0.06 - world.time * 25) * (b.width * 1.3);
+      const outerH = Math.max(TEXEL * 2, q(b.width * 2.2));
+      const coreH = Math.max(TEXEL, q(b.width * 0.75));
+      g.rect(0, -outerH / 2, q(b.length), outerH).fill({ color: b.color });
+      g.rect(0, -coreH / 2, q(b.length), coreH).fill({ color: 0xffffff });
+      for (let d = 0; d < b.length; d += TEXEL * 4) {
+        const wy = Math.round(Math.sin(d * 0.06 - world.time * 25) * (b.width * 1.3) / TEXEL) * TEXEL;
         if (d === 0) g.moveTo(d, wy);
-        else g.lineTo(d, wy);
+        else g.lineTo(q(d), wy);
       }
-      g.stroke({ width: 2, color: 0xfde047 });
+      g.stroke({ width: TEXEL, color: 0xfde047, cap: 'butt' });
     }
 
-    // 深渊触须
+    // 深渊触须（量化折线，方头，逐段变细）
     for (const ten of world.tentacles) {
       const g = this.tentaclePool.acquire();
       g.blendMode = 'add';
-      g.position.set(ten.x, ten.y);
       g.alpha = ten.life / ten.maxLife;
       const segs = 7;
-      let px = 0;
-      let py = 0;
+      let px = q(ten.x);
+      let py = q(ten.y);
       for (let s = 1; s <= segs; s++) {
         const ratio = s / segs;
         const wave = Math.sin(world.time * 14 + ten.phase + s * 0.8) * 0.4;
         const a = ten.baseAngle + wave;
-        const nx = Math.cos(a) * (ten.len * ratio);
-        const ny = Math.sin(a) * (ten.len * ratio);
-        g.moveTo(px, py).lineTo(nx, ny).stroke({ width: (1 - ratio * 0.75) * 12, color: ten.color, cap: 'round' });
+        const nx = q(ten.x + Math.cos(a) * (ten.len * ratio));
+        const ny = q(ten.y + Math.sin(a) * (ten.len * ratio));
+        const w = Math.max(TEXEL, q((1 - ratio * 0.75) * 12));
+        g.moveTo(px, py).lineTo(nx, ny).stroke({ width: w, color: ten.color, cap: 'butt' });
         px = nx;
         py = ny;
       }
     }
 
-    // 天火流星（预警圈 + 拖尾 + 白芯）
+    // 天火流星（像素预警圈 + 方拖尾 + 白芯方块）
     for (const m of world.meteors) {
       const g = this.meteorPool.acquire();
       g.blendMode = 'add';
-      const cx = m.startX + (m.targetX - m.startX) * m.progress;
-      const cy = m.startY + (m.targetY - m.startY) * m.progress;
+      const cx = q(m.startX + (m.targetX - m.startX) * m.progress);
+      const cy = q(m.startY + (m.targetY - m.startY) * m.progress);
 
-      g.circle(m.targetX, m.targetY, m.radius * m.progress).stroke({ width: 2, color: m.color, alpha: 0.53 });
-      g.moveTo(cx, cy).lineTo(cx - 45, cy - 80).stroke({ width: m.isEvolved ? 22 : 14, color: m.color, cap: 'round' });
-      g.circle(cx, cy, m.isEvolved ? 14 : 9).fill({ color: 0xffffff });
+      steppedCirclePath(g, m.targetX, m.targetY, m.radius * m.progress, 12);
+      g.stroke({ width: TEXEL, color: m.color, alpha: 0.55 });
+
+      const tail = m.isEvolved ? TEXEL * 7 : TEXEL * 5;
+      g.moveTo(cx, cy).lineTo(q(cx - 45), q(cy - 80)).stroke({ width: tail, color: m.color, cap: 'butt' });
+      const core = m.isEvolved ? TEXEL * 5 : TEXEL * 3;
+      g.rect(cx - core / 2, cy - core / 2, core, core).fill({ color: 0xffffff });
     }
 
-    // 螺旋龙卷
+    // 螺旋龙卷（量化虚线弧）
     for (const tor of world.tornadoes) {
       const g = this.tornadoPool.acquire();
       g.blendMode = 'add';
-      g.position.set(tor.x, tor.y);
       for (let ring = 0; ring < 4; ring++) {
         const rr = tor.r * (0.3 + ring * 0.22);
-        const offsetX = Math.cos(tor.phase + ring) * 8;
-        const offsetY = Math.sin(tor.phase + ring) * 8;
-        g.arc(offsetX, offsetY, rr, tor.phase + ring, tor.phase + ring + Math.PI * 1.35).stroke({ width: 2.5, color: 0x34d399 });
+        const ox = Math.cos(tor.phase + ring) * 8;
+        const oy = Math.sin(tor.phase + ring) * 8;
+        for (let a = tor.phase + ring; a < tor.phase + ring + Math.PI * 1.35; a += 0.3) {
+          g.moveTo(q(tor.x + ox + Math.cos(a) * rr), q(tor.y + oy + Math.sin(a) * rr));
+          g.lineTo(q(tor.x + ox + Math.cos(a + 0.3) * rr), q(tor.y + oy + Math.sin(a + 0.3) * rr));
+        }
       }
+      g.stroke({ width: TEXEL, color: 0x34d399, cap: 'butt' });
     }
   }
 
@@ -673,7 +770,7 @@ export class GameScene {
       t.text = ft.text;
       t.style.fontSize = ft.size;
       t.style.fill = ft.color;
-      t.position.set(ft.x, ft.y);
+      t.position.set(Math.round(ft.x), Math.round(ft.y));
     }
   }
 
@@ -681,8 +778,13 @@ export class GameScene {
     const g = this.joystickGfx;
     g.clear();
     if (state === 'PLAYING' && input.pointer.active) {
-      g.circle(input.pointer.startX, input.pointer.startY, 42).stroke({ width: 2, color: 0xf5d061, alpha: 0.35 });
-      g.circle(input.pointer.currX, input.pointer.currY, 16).fill({ color: 0xf5d061, alpha: 0.55 });
+      steppedCirclePath(g, input.pointer.startX, input.pointer.startY, 42, 14);
+      g.stroke({ width: TEXEL, color: 0xf5d061, alpha: 0.35 });
+      steppedCirclePath(g, input.pointer.currX, input.pointer.currY, 16, 10);
+      g.fill({ color: 0xf5d061, alpha: 0.55 });
     }
   }
 }
+
+/** 玩家画布四周余量（艺术像素），需容纳光环与尾巴外延 */
+const PAD_PLAYER = 10;

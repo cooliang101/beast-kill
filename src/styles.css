@@ -10,7 +10,8 @@ body, html {
   font-family: 'Noto Serif SC', 'PingFang SC', 'Microsoft YaHei', serif;
   color: #f3efe6;
 }
-canvas { display: block; }
+/* 像素画必须最近邻放大：游戏画布与所有预览画布共用 */
+canvas { display: block; image-rendering: pixelated; }
 
 /* PixiJS 挂载容器 */
 #game-root {
@@ -20,61 +21,65 @@ canvas { display: block; }
 #game-root canvas { width: 100% !important; height: 100% !important; }
 
 /* 操作提示浮层 */
-#hintToast { animation: hintPop 0.18s ease-out; }
+#hintToast { animation: hintPop 0.12s steps(3); }
 @keyframes hintPop {
-  from { opacity: 0; transform: translate(-50%, -8px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes shineSweep { 100% { left: 200%; } }
+@keyframes shineStep { 100% { left: 100%; } }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: rgba(10, 10, 18, 0.8); }
-::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.5); border-radius: 3px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0a0810; }
+::-webkit-scrollbar-thumb { background: #d4af37; border: 2px solid #0a0810; }
 
 /* ============================================================================
-   组件类（放入 components 层：Tailwind 工具类必须能覆盖它们。
-   否则如 .badge-nowrap 的 display 会压过 .hidden，导致元素无法隐藏）
+   组件类（放入 components 层：Tailwind 工具类必须能覆盖它们）
+   像素风原则：平色 + 硬边框 + 阶梯阴影，禁用模糊/圆角/柔和渐变
    ============================================================================ */
 @layer components {
   .font-calligraphy { font-family: 'Ma Shan Zheng', cursive, serif; }
 
-  /* 洪荒暗金鎏金UI边框与底纹 */
+  /* 面板：暗色平底 + 2 像素抖动网格 + 双线描边 + 4 像素硬投影 */
   .myth-panel {
-    background: radial-gradient(circle at 50% 0%, rgba(35, 28, 52, 0.95) 0%, rgba(12, 10, 20, 0.98) 100%);
-    border: 1px solid rgba(212, 175, 55, 0.45);
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.85), inset 0 0 20px rgba(212, 175, 55, 0.1);
-    backdrop-filter: blur(10px);
     position: relative;
+    background-color: #14101d;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 4px),
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 4px);
+    box-shadow:
+      inset 0 0 0 2px #0a0810,
+      inset 0 0 0 4px rgba(212, 175, 55, 0.85),
+      inset 0 0 0 6px #0a0810,
+      0 4px 0 0 #000,
+      0 8px 0 0 rgba(0, 0, 0, 0.5);
   }
-  .myth-panel::before {
-    content: ''; position: absolute; inset: 3px;
-    border: 1px solid rgba(212, 175, 55, 0.14);
-    pointer-events: none; border-radius: inherit;
-  }
+  .myth-panel::before { content: none; }
 
-  /* 进化与升级卡牌特效 */
+  /* 升级/进化卡片：平底 + 硬边框 + 阶梯投影 */
   .evo-card {
-    background: linear-gradient(165deg, rgba(32, 26, 48, 0.96) 0%, rgba(14, 12, 24, 0.98) 65%, rgba(28, 20, 38, 0.96) 100%);
-    border: 1px solid rgba(180, 150, 90, 0.4);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.15);
-    transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    background-color: #171325;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.018) 0 2px, transparent 2px 4px);
+    border: 2px solid #6b5a2e;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08), 0 4px 0 0 #000;
+    transition: transform 0.08s steps(2), border-color 0.08s steps(2), box-shadow 0.08s steps(2);
     position: relative;
-    overflow: hidden;
   }
   .evo-card:hover {
-    transform: translateY(-6px);
+    transform: translateY(-4px);
     border-color: #f5d061;
-    box-shadow: 0 16px 35px rgba(0, 0, 0, 0.9), 0 0 22px rgba(245, 208, 97, 0.3);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.12), 0 8px 0 0 #000, 0 0 0 2px rgba(245, 208, 97, 0.35);
   }
 
+  /* 超武共鸣卡：暖色平底 + 金色粗描边 */
   .synergy-card {
-    background: linear-gradient(165deg, rgba(65, 28, 16, 0.96) 0%, rgba(24, 10, 14, 0.98) 60%, rgba(55, 35, 10, 0.96) 100%);
-    border: 2px solid #fbbf24;
-    box-shadow: 0 0 30px rgba(245, 158, 11, 0.45), inset 0 0 20px rgba(251, 191, 36, 0.2);
+    background-color: #2a1408;
+    background-image: repeating-linear-gradient(45deg, rgba(251, 191, 36, 0.06) 0 3px, transparent 3px 6px);
+    border: 3px solid #fbbf24;
+    box-shadow: inset 0 2px 0 rgba(255, 200, 80, 0.2), 0 4px 0 0 #000, 0 0 0 2px #7c2d12;
   }
 
-  /* 徽章强制单行不折行 */
+  /* 徽章单行不折行（纯布局，不含美术） */
   .badge-nowrap {
     white-space: nowrap !important;
     flex-shrink: 0 !important;
@@ -84,30 +89,43 @@ canvas { display: block; }
     line-height: 1.2;
   }
 
-  /* 进度条流光 */
+  /* 进度条：阶梯色阶 + 每 12 像素一道刻线（像素分段感） */
+  .bar-exp {
+    background-image:
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.38) 0 1px, transparent 1px 12px),
+      linear-gradient(90deg, #0b6a4a 0 28%, #17a889 28% 54%, #8ed44a 54% 78%, #fcd34d 78% 100%);
+  }
+  .bar-hp {
+    background-image:
+      repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.38) 0 1px, transparent 1px 12px),
+      linear-gradient(90deg, #7f1d1d 0 30%, #dc2626 30% 60%, #fb923c 60% 100%);
+  }
+  /* 流光改为"整块像素高光步进"，不再用柔和渐变 */
   .bar-shine { position: relative; overflow: hidden; }
   .bar-shine::after {
-    content: ''; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
-    animation: shineSweep 2.6s infinite;
+    content: ''; position: absolute; top: 0; left: -20%; width: 12%; height: 100%;
+    background: rgba(255, 255, 255, 0.22);
+    animation: shineStep 2.4s steps(8) infinite;
   }
 
-  /* 自定义渐变（替代 Tailwind 渐变工具类，规避 v3/v4 命名差异） */
-  .bar-exp { background: linear-gradient(90deg, #059669, #2dd4bf, #fcd34d); }
-  .bar-hp { background: linear-gradient(90deg, #be123c, #ef4444, #fb923c); }
+  /* 金色按钮：阶梯金底 + 硬斜面 + 硬投影，按下时下沉 */
   .btn-gold {
-    background: linear-gradient(90deg, #d97706, #f59e0b, #eab308);
-    transition: background 0.2s ease;
+    background-image: repeating-linear-gradient(0deg, #f59e0b 0 3px, #eab308 3px 6px);
+    color: #1c1917;
+    box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.45), inset 0 -3px 0 rgba(120, 53, 15, 0.5), 0 4px 0 #7c2d12;
   }
-  .btn-gold:hover { background: linear-gradient(90deg, #f59e0b, #eab308); }
+  .btn-gold:hover { background-image: repeating-linear-gradient(0deg, #fbbf24 0 3px, #facc15 3px 6px); }
+  .btn-gold:active { transform: translateY(3px); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.4), 0 1px 0 #7c2d12; }
+
+  /* 标题：阶梯色带（像素金属感），取代平滑渐变 */
   .title-gold {
-    background: linear-gradient(180deg, #fef3c7, #fcd34d, #d97706);
+    background-image: repeating-linear-gradient(180deg, #fff7d6 0 5px, #fcd34d 5px 10px, #d97706 10px 15px);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
   .title-gold-h {
-    background: linear-gradient(90deg, #fde68a, #fde047, #fb923c);
+    background-image: repeating-linear-gradient(90deg, #fde68a 0 6px, #fde047 6px 12px, #fb923c 12px 18px);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;

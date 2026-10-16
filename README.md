@@ -34,9 +34,11 @@ npm run dev        # 开发服务器（默认 http://localhost:5173）
 | `npm test` | 跑全部单测（纯逻辑 + 模拟层集成，Node 环境） |
 | `npm run smoke` | 真实浏览器冒烟测试：无头 Chromium 自动跑「开始 → ESC 暂停/恢复 → 图鉴流转 → 升级弹窗拦截 → 压测」，截图存 `tools/screenshots/` |
 | `npm run shots` | 美术审查截图：封面/图鉴 37 形态/进化卡/战斗特效/压测/暂停菜单/本局构筑 |
+| `npm run fonts` | **重新生成自托管字体子集**（新增中文文案后必须执行，见下文） |
 | `npx vitest run tests/sim.test.ts` | 只跑单个测试文件 |
 
-> 首次运行 `npm run smoke` 需要已安装 Playwright 的 Chromium（`npx playwright install chromium`）。
+> `npm run smoke` / `npm run shots` 需要本机装一次 Playwright（**它只是测试工具，不在项目依赖里**，以免拖累 CI 与部署）：
+> `npm i -D playwright && npx playwright install chromium`，用完可 `npm remove playwright`。
 
 ## 目录结构
 
@@ -54,6 +56,42 @@ tools/extract-data.mjs   # 从 legacy 演示提取数据表生成 src/config/*.t
 legacy/                  # 原单文件演示（数值与手感的参照基准，勿改）
 tests/                   # Vitest：空间哈希 / 基因 / 升级 / 进化 / 模拟集成
 ```
+
+## 部署到 Cloudflare Pages
+
+纯静态、无服务端，构建产物 `dist/` 的资源全部是相对路径（`./assets/...`），可部署在任意子路径或自定义域名下。已用生产构建产物跑过完整的浏览器冒烟（`SMOKE_URL=<预览地址> npm run smoke`，28/28）。
+
+**方式一：GitHub 集成（推荐，推送到 `main` 即自动部署）**
+
+1. Cloudflare Dashboard → Workers & Pages → Create → Pages → Connect to Git → 选择 `cooliang101/beast-kill`
+2. 构建配置：
+   - Framework preset：`None`
+   - Build command：`npm run build`
+   - Build output directory：`dist`
+   - 环境变量：`NODE_VERSION = 22`（仓库已带 `.nvmrc` 作双保险；Vite 7 要求 Node ≥ 20.19）
+3. 保存后首次构建约 1 分钟，之后每次 push 自动发布。
+
+**方式二：直接上传（不接 Git）**
+
+```bash
+npm run build
+npx wrangler pages deploy dist --project-name=beast-kill
+```
+
+（首次需 `npx wrangler login`）
+
+**两点注意**
+
+- 依赖里没有 Playwright（见上），CI 构建很轻，无需跳过浏览器下载之类的额外配置。
+- **字体已自托管，零外部请求**（见下节）。生产包默认不暴露调试句柄；URL 加 `?debug=1` 可开启 `window.__game`，便于线上排查与控制台调试。
+
+## 字体自托管
+
+游戏不使用任何外部字体 CDN。`npm run fonts`（`tools/fonts.mjs`）会扫描 `index.html` 与 `src/**` 里出现的全部中日韩字符与数字标点，向 Google Fonts 请求**只包含这些字形的 woff2 子集**，落地到 `src/assets/fonts/` 并生成 `src/assets/fonts.css`（每个分片带独立的 `unicode-range`，浏览器按需加载）：
+
+- 两个字体族（书法体 Ma Shan Zheng + 正文 Noto Serif SC 600/900）合计**约 1.4MB**，远小于全量中文字体的 20MB+；首屏只需加载用到的几个分片。
+- 字体文件由 Vite 打包成带内容哈希的本地资源（`./assets/*.woff2`），可部署在任意子路径。
+- **⚠️ 新增中文文案（数据表里的形态名/技能描述、UI 新文案等）后必须重新运行 `npm run fonts`**，否则新增的字缺字形会回退到系统字体。冒烟测试里有两条守卫断言（自托管字体已加载 / 无外部字体 CDN 请求）会兜住这类回归。
 
 ## 像素美术管线
 

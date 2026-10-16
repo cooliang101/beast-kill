@@ -2,11 +2,19 @@
 // 用法：node tools/shots.mjs   （输出到 tools/screenshots/art-*.png）
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
-import { chromium } from 'playwright';
+
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch {
+  console.error('缺少 playwright（仅测试用，非项目依赖）：请先 npm i -D playwright && npx playwright install chromium');
+  process.exit(1);
+}
 
 const PORT = 5191;
 const BASE = process.env.SMOKE_URL || `http://127.0.0.1:${PORT}`;
 const EXTERNAL = !!process.env.SMOKE_URL;
+const DEBUG_URL = `${BASE}${BASE.includes('?') ? '&' : '?'}debug=1`;
 const OUT = 'tools/screenshots';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -33,7 +41,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 
-  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await page.goto(DEBUG_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#game-root canvas');
   await sleep(1200);
 

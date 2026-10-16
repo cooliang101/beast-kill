@@ -3,12 +3,26 @@
 // 用法：node tools/smoke.mjs   （截图输出到 tools/screenshots/）
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
-import { chromium } from 'playwright';
+
+// playwright 只是测试工具，不是项目依赖：缺了就给出一条可复制的安装命令
+let chromium;
+try {
+  ({ chromium } = await import('playwright'));
+} catch {
+  console.error(
+    '缺少 playwright（它仅用于测试，不属于项目依赖）。请先安装：\n' +
+    '  npm i -D playwright && npx playwright install chromium\n' +
+    '（用完可 npm remove playwright，项目本身不需要它）',
+  );
+  process.exit(1);
+}
 
 const PORT = 5188;
-/** 传入 SMOKE_URL 可复用已在运行的服务（例如验证用户正打开的那个实例） */
+/** 传入 SMOKE_URL 可复用已在运行的服务（例如验证用户正打开的那个实例 / 生产构建产物） */
 const EXTERNAL_BASE = process.env.SMOKE_URL;
 const BASE = EXTERNAL_BASE || `http://127.0.0.1:${PORT}`;
+/** 生产构建默认不暴露 __game，加 ?debug=1 打开（与 src/main.ts 的开关对应） */
+const DEBUG_URL = `${BASE}${BASE.includes('?') ? '&' : '?'}debug=1`;
 const SHOT_DIR = 'tools/screenshots';
 
 const results = [];
@@ -57,6 +71,12 @@ try {
   const consoleErrors = [];
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
   page.on('pageerror', (e) => consoleErrors.push(`[pageerror] ${e.message}`));
+  // 字体自托管回归守卫：任何外部字体 CDN 请求都应视为失败
+  const externalFontRequests = [];
+  page.on('request', (r) => {
+    const u = r.url();
+    if (u.includes('fonts.googleapis.com') || u.includes('fonts.gstatic.com')) externalFontRequests.push(u);
+  });
 
   const getState = () => page.evaluate(() => window.__game?.getState() ?? null);
   const visible = (sel) => page.locator(sel).isVisible();
@@ -79,12 +99,22 @@ try {
     }
   }
 
-  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await page.goto(DEBUG_URL, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#game-root canvas', { timeout: 30000 });
   await page.waitForTimeout(500);
 
   check('初始化：Pixi 画布已挂载', (await page.locator('#game-root canvas').count()) > 0);
   check('封面：开始按钮可见', await visible('#btnStartGame'));
+
+  // ---- 字体自托管 ----
+  await page.evaluate(() => document.fonts.ready);
+  const fontsOk = await page.evaluate(
+    () =>
+      document.fonts.check('16px "Ma Shan Zheng"', '山海吞噬录') &&
+      document.fonts.check('900 16px "Noto Serif SC"', '万兽基因谱'),
+  );
+  check('自托管字体已加载（书法体 + 宋体 900）', fontsOk);
+  check('无外部字体 CDN 请求', externalFontRequests.length === 0, externalFontRequests.slice(0, 2).join(' '));
   await page.screenshot({ path: `${SHOT_DIR}/01-start.png` });
 
   // ---- 开始游戏 ----
@@ -202,7 +232,7 @@ try {
 
   // ---- 窄窗口布局：HUD 按钮必须仍在视口内可点击（"点不了"的常见真实原因） ----
   const narrow = await browser.newPage({ viewport: { width: 900, height: 620 } });
-  await narrow.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await narrow.goto(DEBUG_URL, { waitUntil: 'domcontentloaded' });
   await narrow.waitForSelector('#game-root canvas');
   await narrow.click('#btnStartGame');
   await narrow.waitForTimeout(800);

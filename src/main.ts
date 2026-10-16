@@ -1,4 +1,5 @@
 import './styles.css';
+import './assets/fonts.css'; // 自托管字体子集（由 tools/fonts.mjs 生成）
 import { Game } from './game/game';
 
 const host = document.getElementById('game-root');
@@ -33,7 +34,7 @@ window.addEventListener('error', (e) => {
 const game = new Game();
 game.init(host).catch(showFatalError);
 
-// 开发期调试句柄：控制台可直接读写世界，自动化冒烟测试也依赖它读取状态
-if (import.meta.env.DEV) {
+// 调试句柄：开发环境默认暴露；生产构建加 ?debug=1 也可开启（供自动化冒烟测试与线上排查）
+if (import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')) {
   (window as unknown as { __game?: Game }).__game = game;
 }

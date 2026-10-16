@@ -17,6 +17,7 @@ npm test             # vitest run (all tests); npm run test:watch for watch mode
 npx vitest run tests/sim.test.ts   # single test file
 npm run smoke        # headless-Chromium UI smoke test → screenshots in tools/screenshots/
 npm run shots        # 美术审查截图（封面/图鉴/进化卡/战斗特效/压测/暂停/本局构筑）
+npm run fonts        # 重新生成自托管字体子集（新增中文文案后必须执行）
 node tools/extract-data.mjs        # regenerate src/config/{genes,forms,organs,passives}.ts from legacy/
 ```
 
@@ -90,5 +91,6 @@ Modal state machine (in `modals.ts` + `Game.togglePause`): `ESC` pauses during p
 - **Preview canvases are pixel-resolution and upscaled by CSS** (`image-rendering: pixelated`). When adding one: give it an explicit CSS size and let the draw function set `width/height` to the tiny texel size — and remember coordinates inside those canvases are already texels, so don't divide by `TEXEL` again.
 - `npm run shots` captures art-review screenshots (start/hero, codex, evolution cards, combat FX, horde, pause, build panel). Read them after any change to `painter.ts`/`textures.ts`/CSS — most art regressions are only visible there.
 - The top HUD row must keep `flex-wrap` — `body` is `overflow: hidden`, so buttons pushed out of the viewport by a narrow window become completely unreachable rather than scrollable.
-- `npm run smoke` drives a real headless Chromium (`--use-angle=swiftshader`) through the key flows and writes screenshots to `tools/screenshots/`; use it after touching modals/UI state, and read the screenshots to sanity-check rendering. It exposes `window.__game` in dev builds for assertions.
+- `npm run smoke` drives a real headless Chromium (`--use-angle=swiftshader`) through the key flows and writes screenshots to `tools/screenshots/`; use it after touching modals/UI state, and read the screenshots to sanity-check rendering. **Playwright is intentionally NOT a project dependency** (it's a local test tool only, to keep CI/deploy installs light) — the tools dynamically import it and print the install command if missing. They load pages with `?debug=1`, which is the production-safe switch that exposes `window.__game` (dev builds expose it by default). Verify a *production* build by running `npm run build`, serving `dist/` (e.g. `npx vite preview`), then `SMOKE_URL=<url> node tools/smoke.mjs` — the same suite runs against the artifact that gets deployed to Cloudflare Pages.
+- **Fonts are self-hosted as generated subsets** — `src/assets/fonts/*.woff2` + `src/assets/fonts.css` come from `npm run fonts` (`tools/fonts.mjs`), which scans `index.html` + `src/**` for every CJK/ASCII char used and fetches matching woff2 subsets from Google Fonts, emitting one `@font-face` per chunk with its own `unicode-range`. **After adding any new Chinese text (form/organ/skill names in the data tables, UI copy), re-run `npm run fonts`** or the new glyphs silently fall back to system fonts. Never hand-edit the generated CSS; the smoke suite asserts fonts load locally and that zero requests hit Google's font CDNs.
 - `legacy/` is read-only reference; `tools/extract-data.mjs` reads it, so don't rename or delete that file.

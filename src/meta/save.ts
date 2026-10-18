@@ -21,6 +21,8 @@ export interface MetaSave {
   clears: number;
   /** 已解锁的最高难度层级（1..4） */
   difficulty: number;
+  /** 当前选择的难度层级（开局使用；解锁新难度不会自动切换） */
+  selectedDifficulty: number;
   clearedTiers: number[];
   /** 已解锁的起始器官 id（默认为 claw） */
   unlockedOrgans: string[];
@@ -98,6 +100,7 @@ export function defaultSave(): MetaSave {
     bestTime: 0,
     clears: 0,
     difficulty: 1,
+    selectedDifficulty: 1,
     clearedTiers: [],
     unlockedOrgans: ['claw'],
     unlockedBloodlines: [],
@@ -134,10 +137,15 @@ function writeRaw(value: string): void {
 /** 兼容旧档：缺字段补默认值 */
 function normalize(raw: Partial<MetaSave>): MetaSave {
   const d = defaultSave();
+  const unlocked = Math.max(1, Math.min(BALANCE.maxDifficulty, raw.difficulty ?? d.difficulty));
+  // 关键：解锁新难度不自动提高当前选择（旧档没有该字段时统一回到 1 档）
+  const selected = Math.max(1, Math.min(unlocked, raw.selectedDifficulty ?? 1));
   return {
     ...d,
     ...raw,
     version: SAVE_VERSION,
+    difficulty: unlocked,
+    selectedDifficulty: selected,
     unlockedOrgans: Array.isArray(raw.unlockedOrgans) && raw.unlockedOrgans.length > 0 ? raw.unlockedOrgans : d.unlockedOrgans,
     unlockedBloodlines: Array.isArray(raw.unlockedBloodlines) ? raw.unlockedBloodlines : [],
     clearedTiers: Array.isArray(raw.clearedTiers) ? raw.clearedTiers : [],

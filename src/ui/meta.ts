@@ -85,23 +85,28 @@ function renderMetaModal(game: Game): void {
   byId('metaSummary').textContent =
     `累计精华 ${m.totalEarned.toLocaleString()} · 通关 ${m.clears} 次 · 最长存活 ${fmtTime(m.bestTime)} · 当前难度：${difficultyName(m.difficulty)}`;
 
-  // ---- 难度层级（通关自动解锁，无需购买） ----
+  // ---- 难度层级（通关自动解锁；点击切换当前选择，解锁不会自动上调） ----
   const diffCards = BALANCE.difficultyNames
     .map((name, i) => {
       const tier = i + 1;
       const unlocked = tier <= m.difficulty;
       const cleared = m.clearedTiers.includes(tier);
-      const cls = cleared
-        ? 'border-emerald-400/60 bg-emerald-950/40 text-emerald-200'
-        : unlocked
-          ? 'border-amber-400/50 bg-slate-900/90 text-amber-200'
-          : 'border-slate-700/50 bg-slate-950/60 text-slate-500';
-      return `
-        <div class="rounded-none border ${cls} p-3">
-          <div class="font-bold mb-1">${cleared ? '✅' : unlocked ? '⚔️' : '🔒'} ${name}</div>
-          <div class="text-[11px] text-slate-400">敌人强度 ×${BALANCE.difficultyEnemyHpMult[i]} · 精华收益 ×${BALANCE.difficultyEssenceMult[i]}</div>
-          <div class="text-[11px] mt-1">${cleared ? '已通关' : unlocked ? '可挑战' : `通关「${difficultyName(tier - 1)}」后解锁`}</div>
-        </div>`;
+      const selected = m.selectedDifficulty === tier;
+      const cls = selected
+        ? 'border-amber-400 bg-amber-500/15 text-amber-100'
+        : cleared
+          ? 'border-emerald-400/60 bg-emerald-950/40 text-emerald-200'
+          : unlocked
+            ? 'border-slate-500/60 bg-slate-900/90 text-slate-200 hover:border-amber-400/60'
+            : 'border-slate-700/50 bg-slate-950/60 text-slate-500';
+      const tag = selected ? '当前' : cleared ? '已通关' : unlocked ? '可挑战' : `通关「${difficultyName(tier - 1)}」后解锁`;
+      const inner = `
+        <div class="font-bold mb-1">${selected ? '▶' : cleared ? '✅' : unlocked ? '⚔️' : '🔒'} ${name}${selected ? ' · 当前' : ''}</div>
+        <div class="text-[11px] text-slate-400">敌人强度 ×${BALANCE.difficultyEnemyHpMult[i]} · 精华收益 ×${BALANCE.difficultyEssenceMult[i]}</div>
+        <div class="text-[11px] mt-1">${tag}</div>`;
+      return unlocked
+        ? `<button data-select-diff="${tier}" class="text-left rounded-none border ${cls} p-3 cursor-pointer transition">${inner}</button>`
+        : `<div class="rounded-none border ${cls} p-3">${inner}</div>`;
     })
     .join('');
 
@@ -178,7 +183,7 @@ function renderMetaModal(game: Game): void {
     </div>
   `;
 
-  // 购买交互
+  // 购买/选择交互
   host.querySelectorAll<HTMLElement>('[data-buy-node]').forEach((el) => {
     el.onclick = () => buyNode(game, el.dataset.buyNode ?? '');
   });
@@ -187,6 +192,15 @@ function renderMetaModal(game: Game): void {
   });
   host.querySelectorAll<HTMLElement>('[data-buy-bloodline]').forEach((el) => {
     el.onclick = () => buyBloodline(game, el.dataset.buyBloodline as GeneId);
+  });
+  host.querySelectorAll<HTMLElement>('[data-select-diff]').forEach((el) => {
+    el.onclick = () => {
+      const tier = Number(el.dataset.selectDiff ?? '1');
+      if (tier > game.meta.difficulty) return;
+      game.meta.selectedDifficulty = tier;
+      persistMeta(game.meta);
+      renderMetaModal(game);
+    };
   });
 }
 
@@ -252,7 +266,7 @@ function renderRunPrep(game: Game, onConfirm: (organId: string, bloodline: GeneI
   if (!organHost || !bloodHost || !summary) return;
 
   summary.innerHTML =
-    `难度：<b class="text-amber-300">${difficultyName(m.difficulty)}</b>（精华收益 ×${BALANCE.difficultyEssenceMult[Math.min(m.difficulty, BALANCE.maxDifficulty) - 1]}） · ` +
+    `难度：<b class="text-amber-300">${difficultyName(m.selectedDifficulty)}</b>（精华收益 ×${BALANCE.difficultyEssenceMult[Math.min(m.selectedDifficulty, BALANCE.maxDifficulty) - 1]}，可在祭坛切换） · ` +
     `局外加成已生效（气血/移速/伤害/暴击/护甲节点） · 通关目标：击败 <b>${BALANCE.victoryBosses}</b> 个洪荒霸主 或存活 ${Math.round(BALANCE.victoryTime / 60)} 分钟`;
 
   organHost.innerHTML = m.unlockedOrgans
@@ -336,7 +350,7 @@ export function openSettlement(game: Game, victory: boolean, gained: number, unl
   byId('endEssence').innerHTML = `
     <div class="flex justify-between"><span>本局获得精华：</span><b class="text-purple-200">💠 ${gained.toLocaleString()}（难度 ×${diffMult}）</b></div>
     <div class="flex justify-between"><span>累计精华：</span><b class="text-purple-200">💠 ${game.meta.essence.toLocaleString()}</b></div>
-    ${unlockedTier ? `<div class="text-center text-amber-300 font-bold">🔓 解锁新难度：${difficultyName(unlockedTier)}</div>` : ''}
+    ${unlockedTier ? `<div class="text-center text-amber-300 font-bold">🔓 已解锁新难度：${difficultyName(unlockedTier)}（可在吞噬祭坛切换，不会自动上调）</div>` : ''}
   `;
 
   byId('btnEndless').classList.toggle('hidden', !victory);

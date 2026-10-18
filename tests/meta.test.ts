@@ -59,6 +59,20 @@ describe('局外存档', () => {
     expect(m.clearedTiers).toEqual([]);
   });
 
+  it('已解锁高档难度的老存档：当前选择回落为 1 档（避免难度反噬）', () => {
+    persistMeta({ essence: 0, difficulty: 3, clearedTiers: [1, 2] } as unknown as MetaSave);
+    const m = loadMeta();
+    expect(m.difficulty).toBe(3);
+    expect(m.selectedDifficulty).toBe(1);
+  });
+
+  it('当前选择不会超过已解锁档位，也不会被越界值破坏', () => {
+    persistMeta({ essence: 0, difficulty: 2, selectedDifficulty: 4 } as unknown as MetaSave);
+    expect(loadMeta().selectedDifficulty).toBe(2);
+    persistMeta({ essence: 0, difficulty: 2, selectedDifficulty: -5 } as unknown as MetaSave);
+    expect(loadMeta().selectedDifficulty).toBe(1);
+  });
+
   it('损坏存档回退默认值', () => {
     persistMeta('not-json' as unknown as MetaSave);
     const m = loadMeta();
@@ -98,6 +112,8 @@ describe('精华结算', () => {
     expect(m.clearedTiers).toEqual([1]);
     expect(m.difficulty).toBe(2);
     expect(second.unlockedTier).toBe(2);
+    // 关键：解锁更高难度不改变当前选择
+    expect(m.selectedDifficulty).toBe(1);
     expect(m.bestTime).toBe(400);
     expect(m.essence).toBe(first.gained + second.gained);
   });

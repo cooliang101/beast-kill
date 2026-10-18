@@ -130,10 +130,16 @@ function pickAffix(): EliteAffix {
   return AFFIXES[Math.floor(Math.random() * AFFIXES.length)];
 }
 
+/** 敌人上限随时间增长：开局克制（≈原 demo 的 115~140），中后期逐级放开 */
+export function enemyCapAt(world: World): number {
+  const cap = BALANCE.enemyCapBase + (world.time / 60) * BALANCE.enemyCapPerMinute;
+  return Math.min(BALANCE.enemyCapMax, Math.round(cap));
+}
+
 /** 分裂：生成若干缩小的子体（子体不再分裂，行为转为追击） */
 export function spawnSplitChildren(world: World, parent: Enemy, count: number): void {
   for (let i = 0; i < count; i++) {
-    if (world.enemies.length >= BALANCE.enemyCap + 80) break; // 允许分裂短时超上限
+    if (world.enemies.length >= enemyCapAt(world) + 80) break; // 允许分裂短时超上限
     const a = (i / count) * Math.PI * 2 + Math.random();
     const e = world.pools.enemy.acquire();
     initEnemy(world, e, parent.typeIndex, parent.x + Math.cos(a) * parent.radius, parent.y + Math.sin(a) * parent.radius, 1, {
@@ -230,8 +236,10 @@ function segDuration(phase: EncounterPhase): number {
   }
 }
 
-/** 生成一份覆盖全局长度的随机剧本（每局不同；段序与时长都带随机） */
-export function generateRunPlan(): EncounterSegment[] {
+/** 生成一份覆盖全局长度的随机剧本（每局不同；段序与时长都带随机）。
+ *  applyGrace 时会把开局 earlyGraceTime 内的兽潮/精英段降级为平静段——
+ *  开局必须先给玩家进入状态的时间，节奏从平静逐步走高。 */
+export function generateRunPlan(applyGrace = true): EncounterSegment[] {
   const plan: EncounterSegment[] = [];
   const template: EncounterPhase[] = ['calm', 'horde', 'calm', 'elite', 'breather', 'horde', 'calm', 'elite', 'breather', 'horde'];
   const rest = template.slice(1);
@@ -244,7 +252,11 @@ export function generateRunPlan(): EncounterSegment[] {
   const target = BALANCE.victoryTime + 180;
   let k = 0;
   while (total < target) {
-    const phase = order[k % order.length];
+    let phase = order[k % order.length];
+    // 开局宽限：前 earlyGraceTime 秒内不排兽潮/精英段
+    if (applyGrace && total < BALANCE.earlyGraceTime && (phase === 'horde' || phase === 'elite')) {
+      phase = 'calm';
+    }
     const duration = segDuration(phase);
     plan.push({ phase, duration });
     total += duration;
@@ -258,7 +270,11 @@ export function createDirector(): Director {
     plan: generateRunPlan(),
     index: 0,
     segmentElapsed: 0,
-    eventTimer: BALANCE.eventInterval[0] + Math.random() * (BALANCE.eventInterval[1] - BALANCE.eventInterval[0]),
+    // 首个随机事件不早于"宽限 + 30 秒"，避免与宽限结束后的第一波兽潮叠加成尖峰
+    eventTimer: Math.max(
+      BALANCE.earlyGraceTime + 30,
+      BALANCE.eventInterval[0] + Math.random() * (BALANCE.eventInterval[1] - BALANCE.eventInterval[0]),
+    ),
     bloodMoonTimer: 0,
   };
 }
@@ -279,6 +295,8 @@ const EVENT_LABELS: Record<string, { label: string; color: string }> = {
 export type EventKind = keyof typeof EVENT_LABELS;
 
 export function triggerEvent(world: World, kind: EventKind): void {
+  // 兜底：宽限期内不允许"增压类"事件（精英猎杀），换成纯增益的天降火雨
+  if (world.time < BALANCE.earlyGraceTime && kind === 'eliteHunt') kind = 'meteor';
   const def = EVENT_LABELS[kind];
   world.events.onEvent?.(def.label, def.color);
 
@@ -331,14 +349,14 @@ export function updateDirector(world: World, dt: number): EncounterPhase {
     d.index++;
     seg = d.plan[d.index];
     if (!seg) {
-      d.plan = generateRunPlan();
+      d.plan = generateRunPlan(false); // 局内续接的剧本不再套用开局宽限
       d.index = 0;
       seg = d.plan[0];
       break;
     }
-    // 进入"精英"段：立即增援精英
-    if (seg.phase === 'elite') {
-      spawnElites(world, 2, 480);
+    // 进入"精英"段：立即增援精英（开局宽限期内不刷）
+    if (seg.phase === 'elite' && world.time >= BALANCE.earlyGraceTime) {
+      spawnElites(world, 1, 480);
     }
   }
 
@@ -370,7 +388,7 @@ export function spawnEnemies(world: World, dt: number): void {
   let spawnMult = 1;
   let countMult = 1;
   switch (phase) {
-    case 'horde': spawnMult = BALANCE.hordeSpawnMult; countMult = 2; break;
+    case 'horde': spawnMult = BALANCE.hordeSpawnMult; countMult = BALANCE.hordeCountMult; break;
     case 'elite': spawnMult = 0.6; break;
     case 'breather': spawnMult = 0; break;
     default: break;
@@ -378,12 +396,18 @@ export function spawnEnemies(world: World, dt: number): void {
   if (world.director.bloodMoonTimer > 0) spawnMult *= BALANCE.bloodMoonSpawnMult;
 
   world.spawnTimer -= dt;
-  if (spawnMult > 0 && world.spawnTimer <= 0 && world.enemies.length < BALANCE.enemyCap) {
-    const base = Math.max(BALANCE.spawnIntervalMin, BALANCE.spawnIntervalBase - world.time * 0.002);
-    world.spawnTimer = base / spawnMult;
-    const count = Math.round((1 + Math.floor(world.time / BALANCE.spawnCountPerSeconds)) * countMult);
+  if (spawnMult > 0 && world.spawnTimer <= 0 && world.enemies.length < enemyCapAt(world)) {
+    // 显式速率曲线：开局 1.2 只/秒，每分钟 +0.55，上限 9 只/秒
+    const rate =
+      Math.min(BALANCE.spawnRateMax, BALANCE.spawnRateBase + (world.time / 60) * BALANCE.spawnRatePerMinute) * spawnMult;
+    world.spawnTimer = 1 / rate;
+    const count = Math.max(1, Math.round(BALANCE.spawnBurstCount * countMult));
     const scaleMult = (1 + world.time * BALANCE.scaleTimeFactor + Math.pow(world.player.level, 1.22) * BALANCE.scaleLevelFactor) * difficultyHpMult(world);
-    const eliteChance = BALANCE.eliteChanceBase + (world.time / 60) * BALANCE.eliteChancePerMinute;
+    // 开局宽限期内不刷精英
+    const eliteChance =
+      world.time < BALANCE.earlyGraceTime
+        ? 0
+        : BALANCE.eliteChanceBase + (world.time / 60) * BALANCE.eliteChancePerMinute;
 
     for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2;

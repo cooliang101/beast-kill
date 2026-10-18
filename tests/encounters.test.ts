@@ -7,6 +7,7 @@ import {
   AFFIX_NAMES,
   BOSS_TEXTURE_INDEX,
   WILD_TYPES,
+  enemyCapAt,
   generateRunPlan,
   spawnElites,
   triggerEvent,
@@ -140,8 +141,16 @@ describe('波次导演', () => {
     expect(world.gems.length).toBeGreaterThanOrEqual(gemsBefore + BALANCE.treasureGemCount);
   });
 
-  it('精英猎杀事件：出现精英', () => {
+  it('精英猎杀事件：出现精英（宽限期内会被降级为天降火雨）', () => {
+    // 宽限期内：增压类事件被兜底降级，不会在开局投放精英
+    const early = quietWorld();
+    triggerEvent(early, 'eliteHunt');
+    expect(early.enemies.filter((e) => e.elite).length).toBe(0);
+    expect(early.meteors.length).toBeGreaterThan(0); // 降级成了天降火雨
+
+    // 宽限之后：正常投放 2 只精英
     const world = quietWorld();
+    world.time = BALANCE.earlyGraceTime + 1;
     triggerEvent(world, 'eliteHunt');
     const elites = world.enemies.filter((e) => e.elite);
     expect(elites.length).toBe(2);
@@ -240,6 +249,72 @@ describe('精英怪', () => {
     e.hp = 500;
     updateWorld(world, STEP, STILL);
     expect(e.hp).toBeGreaterThan(500);
+  });
+});
+
+describe('开局节奏（前期难度约束）', () => {
+  it('剧本前 90 秒不出现兽潮/精英段', () => {
+    for (let round = 0; round < 8; round++) {
+      const plan = generateRunPlan();
+      let t = 0;
+      for (const seg of plan) {
+        if (t >= BALANCE.earlyGraceTime) break;
+        expect(seg.phase === 'horde' || seg.phase === 'elite').toBe(false);
+        t += seg.duration;
+      }
+    }
+  });
+
+  it('局内续接的剧本不套用宽限（generateRunPlan(false) 可含兽潮）', () => {
+    let sawHorde = false;
+    for (let round = 0; round < 20 && !sawHorde; round++) {
+      const plan = generateRunPlan(false);
+      let t = 0;
+      for (const seg of plan) {
+        if (t >= BALANCE.earlyGraceTime) break;
+        if (seg.phase === 'horde' || seg.phase === 'elite') sawHorde = true;
+        t += seg.duration;
+      }
+    }
+    expect(sawHorde).toBe(true);
+  });
+
+  it('宽限期内不刷精英', () => {
+    const world = quietWorld();
+    // 只留普通刷怪（关掉导演段的干扰：手动设为长平静段）并重新打开刷怪
+    world.director.plan = [{ phase: 'calm', duration: 99999 }];
+    world.director.index = 0;
+    world.spawnTimer = 0;
+    for (let i = 0; i < 60 * 80; i++) updateWorld(world, STEP, STILL); // 80 秒
+    expect(world.time).toBeLessThan(BALANCE.earlyGraceTime);
+    expect(world.enemies.length).toBeGreaterThan(10); // 确认确实在刷怪
+    expect(world.enemies.some((e) => e.elite)).toBe(false);
+  });
+
+  it('敌人上限随时间增长且有硬顶', () => {
+    const world = quietWorld();
+    const at0 = enemyCapAt(world);
+    expect(at0).toBe(BALANCE.enemyCapBase);
+    world.time = 600;
+    const at10m = enemyCapAt(world);
+    expect(at10m).toBeGreaterThan(at0);
+    world.time = 3600;
+    expect(enemyCapAt(world)).toBe(BALANCE.enemyCapMax);
+  });
+
+  it('兽潮段的刷怪速率显著高于平静段，但仍受上限约束', () => {
+    const run = (phase: 'calm' | 'horde'): number => {
+      const world = quietWorld();
+      world.director.plan = [{ phase, duration: 99999 }];
+      world.director.index = 0;
+      world.spawnTimer = 0; // 重新打开刷怪（quietWorld 默认关掉了）
+      for (let i = 0; i < 60 * 12; i++) updateWorld(world, STEP, STILL); // 12 秒
+      return world.enemies.length;
+    };
+    const calm = run('calm');
+    const horde = run('horde');
+    expect(horde).toBeGreaterThan(calm * 1.5);
+    expect(horde).toBeLessThan(calm * 3.5); // 只放大速率（×2.2），不再叠加数量倍率
   });
 });
 

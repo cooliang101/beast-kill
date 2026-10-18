@@ -2,14 +2,26 @@
 
 export const BALANCE = {
   // ---- 刷怪 ----
-  enemyCap: 500, // 原 demo 为 115（Canvas2D 渲染上限），Pixi 下大幅提高
-  spawnIntervalBase: 0.75,
-  spawnIntervalMin: 0.2,
-  spawnCountPerSeconds: 35, // count = 1 + floor(gameTime / 35)
+  // 敌人上限随时间从 enemyCapBase 增长到 enemyCapMax（原 demo 恒为 115；
+  // 开局必须克制，后期再放开，避免"一上来就满屏怪"）
+  enemyCapBase: 110,
+  enemyCapPerMinute: 18,
+  enemyCapMax: 360,
+  /** 硬上限（压测/事件短时突破用） */
+  enemyCap: 500,
+  // 刷怪速率曲线（显式曲线，便于推理与调参）：
+  // 替代原 demo 的 1 + floor(t/35) 分段跳变——那条曲线第 2 分钟就到 ~7.8 只/秒，
+  // 远超玩家早期清怪能力，是"前期怪太多"的主因。
+  spawnRateBase: 1.2, // 开局每秒刷怪数
+  spawnRatePerMinute: 0.55, // 每分钟递增
+  spawnRateMax: 9, // 后期上限（每秒）
+  spawnBurstCount: 1, // 普通段每次刷 1 只；兽潮段由 hordeCountMult 放大
   scaleTimeFactor: 0.025,
   scaleLevelFactor: 0.11,
   spawnRingMargin: 70,
   separation: true, // 轻量群体分离，避免大量单位重叠成一坨
+  /** 开局宽限：此时间内不刷精英、不出随机事件、剧本不排兽潮/精英段 */
+  earlyGraceTime: 90,
 
   // ---- Boss ----
   bossFirstTime: 45,
@@ -46,28 +58,28 @@ export const BALANCE = {
 
   // ---- 敌人行为（P1） ----
   rangedKeepDist: 250,
-  rangedFireCd: 2.6,
-  rangedShotSpeed: 3.4,
-  rangedShotDmg: 18,
+  rangedFireCd: 3.0,
+  rangedShotSpeed: 3.0,
+  rangedShotDmg: 12,
   rangedShotLife: 4,
-  chargerTriggerDist: 330,
-  chargerWindup: 0.55,
+  chargerTriggerDist: 300,
+  chargerWindup: 0.65,
   chargerDashTime: 0.4,
-  chargerDashSpeed: 9.2,
+  chargerDashSpeed: 8.0,
   chargerRecover: 0.85,
-  splitterChildren: 2,
+  splitterChildren: 1,
   splitterChildScale: 0.62,
   splitterChildHpMult: 0.4,
   armoredDamageMult: 0.85, // 护甲行为受到的伤害倍率
-  bufferPeriod: 2.2,
+  bufferPeriod: 2.6,
   bufferRadius: 210,
-  bufferHealPct: 0.07,
+  bufferHealPct: 0.05,
   fleeSpeedMult: 1.35,
 
   // ---- 精英怪（P1） ----
-  eliteChanceBase: 0.05,
-  eliteChancePerMinute: 0.014,
-  eliteHpMult: 3.2,
+  eliteChanceBase: 0.015,
+  eliteChancePerMinute: 0.01,
+  eliteHpMult: 2.6,
   eliteRadiusMult: 1.4,
   eliteExpMult: 2.2,
   eliteContactMult: 1.25,
@@ -80,14 +92,15 @@ export const BALANCE = {
   segmentHorde: [12, 20] as const,
   segmentElite: [8, 14] as const,
   segmentBreather: [5, 9] as const,
-  hordeSpawnMult: 2.6, // 兽潮段刷怪速率倍率
-  eventInterval: [42, 68] as const,
-  eventHordeCount: 34,
+  hordeSpawnMult: 2.2, // 兽潮段：只放大刷怪速率
+  hordeCountMult: 1, // 每次刷怪数量倍率（保持 1：爆发感交给"兽潮突袭"事件的成批投放）
+  eventInterval: [75, 110] as const,
+  eventHordeCount: 22,
   eventMeteorCount: 10,
   eventMeteorDmg: 46,
-  bloodMoonDuration: 20,
-  bloodMoonSpeedMult: 1.3,
-  bloodMoonSpawnMult: 1.5,
+  bloodMoonDuration: 15,
+  bloodMoonSpeedMult: 1.2,
+  bloodMoonSpawnMult: 1.25,
   bloodMoonExpMult: 1.25,
   treasureGemCount: 6,
   treasureHpMult: 6,

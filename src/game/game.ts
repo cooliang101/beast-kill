@@ -127,7 +127,11 @@ export class Game {
     sfx.init();
     if (opts?.organId) this.world.startOrganId = opts.organId;
     if (opts && 'bloodline' in opts) this.world.bloodline = opts.bloodline ?? null;
-    this.world.difficulty = Math.min(this.meta.difficulty, BALANCE.maxDifficulty);
+    // 使用"当前选择"的难度（解锁更高档不会自动上调，避免通关后被难度反噬）
+    this.world.difficulty = Math.max(
+      1,
+      Math.min(this.meta.selectedDifficulty ?? 1, this.meta.difficulty, BALANCE.maxDifficulty),
+    );
 
     resetWorld(this.world);
     this.world.player.meta = metaBonuses(this.meta); // 局外属性节点生效

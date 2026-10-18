@@ -211,8 +211,8 @@ try {
   await page.waitForTimeout(500);
   check('封面 → 吞噬祭坛打开', await visible('#metaModal'));
   const buyNodes = await page.locator('#metaContent [data-buy-node]').count();
-  const diffCards = await page.locator('#metaContent .grid-cols-2.md\\:grid-cols-4 > div').count();
-  check('祭坛渲染解锁树（难度/血脉/器官/节点）', buyNodes >= 5 && diffCards >= 4, `节点按钮=${buyNodes} 难度卡=${diffCards}`);
+  const selectDiffs = await page.locator('#metaContent [data-select-diff]').count();
+  check('祭坛渲染解锁树（难度/血脉/器官/节点）', buyNodes >= 5 && selectDiffs >= 1, `节点按钮=${buyNodes} 可选难度=${selectDiffs}`);
   await page.screenshot({ path: `${SHOT_DIR}/08-meta.png` });
   await page.click('#btnCloseMeta');
   await page.waitForTimeout(300);
